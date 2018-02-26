@@ -1,12 +1,10 @@
 #import "EXGLViewManager.h"
-
 #import "EXGLView.h"
 
 #import <React/RCTUIManager.h>
 
 @interface EXGLViewManager ()
 
-@property (nonatomic, strong) NSMutableDictionary<NSNumber *, EXGLView *> *arSessions;
 @property (nonatomic, assign) NSUInteger nextARSessionId;
 
 @end
@@ -28,13 +26,14 @@ RCT_EXPORT_MODULE(ExponentGLViewManager);
 
 + (BOOL)requiresMainQueueSetup
 {
-  return NO;
+  return YES;
 }
 
+/*
 - (dispatch_queue_t)methodQueue
 {
   return dispatch_queue_create("host.exp.exponent.GLViewManager", DISPATCH_QUEUE_SERIAL);
-}
+}*/
 
 - (UIView *)view
 {

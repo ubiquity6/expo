@@ -11,6 +11,7 @@
 - (void)setIsPlaneDetectionEnabled:(BOOL)planeDetectionEnabled;
 - (void)setIsLightEstimationEnabled:(BOOL)lightEstimationEnabled;
 - (void)updateARCamTexture;
+- (void *)arSession;
 
 @end
 

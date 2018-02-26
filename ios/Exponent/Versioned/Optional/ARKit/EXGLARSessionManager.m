@@ -253,6 +253,11 @@ static GLfloat arCamVerts[] = { -2.0f, 0.0f, 0.0f, -2.0f, 2.0f, 2.0f };
            };
 }
 
+- (id)underlyingARSession
+{
+  return self.arSession;
+}
+
 - (NSDictionary *)planes
 {
   if (!self.arSession) {

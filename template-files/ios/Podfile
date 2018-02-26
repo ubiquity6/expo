@@ -8,6 +8,10 @@ ${EXPONENT_CLIENT_DEPS}
   pod 'ExponentCPP', :path => '../cpp'
   pod 'GoogleMobileVision/FaceDetector', '~> 1.1.0'
   pod 'GoogleMobileVision/MVDataOutput', '~> 1.1.0'
+
+  # Ubiquity local (tmp)
+  pod 'Epiphany', :path => '../../ubiquity-monorepo/EpiphanyFrameworkPodspecDirectory'
+
 ${PODFILE_UNVERSIONED_RN_DEPENDENCY}
 ${PODFILE_VERSIONED_RN_DEPENDENCIES}
 

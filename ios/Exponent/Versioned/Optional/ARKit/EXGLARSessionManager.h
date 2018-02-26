@@ -1,4 +1,6 @@
 #import "EXGLView.h"
+#import <ARKit/ARKit.h>
+
 
 @interface EXGLARSessionManager : NSObject
 
@@ -9,6 +11,7 @@
 - (NSDictionary *)arLightEstimation;
 - (NSDictionary *)rawFeaturePoints;
 - (NSDictionary *)planes;
+- (id)underlyingARSession;
 
 @property (nonatomic, assign) BOOL isPlaneDetectionEnabled;
 @property (nonatomic, assign) BOOL isLightEstimationEnabled;

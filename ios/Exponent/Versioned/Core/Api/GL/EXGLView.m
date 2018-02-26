@@ -503,6 +503,15 @@ RCT_NOT_IMPLEMENTED(- (instancetype)init);
   }
 }
 
+- (id)arSession
+{
+  if (_arSessionManager) {
+    return [_arSessionManager underlyingARSession];
+  }
+  
+  return NULL;
+}
+
 - (NSDictionary *)arMatricesForViewportSize:(CGSize)viewportSize zNear:(CGFloat)zNear zFar:(CGFloat)zFar
 {
   if (_arSessionManager) {

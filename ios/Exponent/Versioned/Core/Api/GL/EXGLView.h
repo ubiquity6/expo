@@ -21,6 +21,7 @@
 - (void)setIsPlaneDetectionEnabled:(BOOL)planeDetectionEnabled;
 - (void)setIsLightEstimationEnabled:(BOOL)lightEstimationEnabled;
 - (void)setWorldAlignment:(NSInteger)worldAlignment;
+- (id)arSession;
 
 // "protected"
 @property (nonatomic, strong) EAGLContext *eaglCtx;
