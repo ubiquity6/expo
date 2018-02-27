@@ -1,3 +1,24 @@
+# Instructions for Ubiquity fork
+
+This is a fork of the expo client designed to include our native modules. The instructions for
+building the iOS app is the same as below, but you must first compile our native modules in the
+correct location. So:
+
+- Install the bazel build system (https://docs.bazel.build/versions/master/install.html).
+- Clone the repo ubiquity6/ubiquity-monorepo. Note that you must clone ubiquity-monorepo adjacent to
+  this expo repo, e.g, your directory structure must look something like
+  /somefolder
+    /ubiquity-monorepo
+    /expo
+- Go into ubiquity-monorepo and run:
+```
+  bazel build epiphany/ios:Epiphany --ios_multi_cpus=arm64 --copt=-fembed-bitcode  --ios_sdk_version=11.2 
+  python epiphany/ios/make_podspec.py
+```
+
+- Now return to this expo repo and follow the instructions below (provided by Expo itself -- it's in
+  the Set Up section)
+
 # Expo Client [![Slack](https://slack.expo.io/badge.svg)](https://slack.expo.io)
 
 The Expo client app for Android and iOS.
