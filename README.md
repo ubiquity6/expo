@@ -5,6 +5,7 @@ building the iOS app is the same as below, but you must first compile our native
 correct location. So:
 
 - Install the bazel build system (https://docs.bazel.build/versions/master/install.html).
+- Ensure your xcode supports ios 11.2
 - Clone the repo ubiquity6/ubiquity-monorepo. Note that you must clone ubiquity-monorepo adjacent to
   this expo repo, e.g, your directory structure must look something like
   /somefolder
