@@ -62,8 +62,6 @@ RCT_REMAP_METHOD(openAtlasConnection,
 {
   NSString *sensor_packet_url = [RCTConvert NSString:options[@"sensor_packet_url"]];
   int session_id = [RCTConvert int:options[@"session_id"]];
-  NSString *device_identifier = [RCTConvert NSString:options[@"device_identifier"]];
-  int earth_alignment = [RCTConvert int:options[@"earth_alignment"]];
   int num_workers = [RCTConvert int:options[@"num_workers"]];
   int max_images = [RCTConvert int:options[@"max_images"]];
   int map_id = [RCTConvert int:options[@"map_id"]];
@@ -71,8 +69,6 @@ RCT_REMAP_METHOD(openAtlasConnection,
   int connection_handle = epiphany_openAtlasConnection(
         [sensor_packet_url UTF8String],
         session_id,
-        [device_identifier UTF8String],
-        earth_alignment,
         num_workers,
         max_images,
         map_id
@@ -129,20 +125,21 @@ RCT_REMAP_METHOD(linkARSessionAsync,
   resolve(@"Success");
 }
 
-RCT_EXPORT_METHOD(enqueueSensorPacket:(nonnull NSNumber*)connectionHandle)
+RCT_REMAP_METHOD(enqueueSensorPacket,
+                 enqueueSensorPacketWithHandle:(nonnull NSNumber *)connectionHandle
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
 {
   // get the pose
   matrix_float4x4 transform = [self.arSession.currentFrame.camera transform];
-  float rw = 1;
-  float rx = 0;
-  float ry = 0;
-  float rz = 0;
-  QuaternionFromMatrix(transform, &rw, &rx, &ry, &rz);
-  float x = 0;
-  float y = 0;
-  float z = 0;
-  PositionFromMatrix(transform, &x, &y, &z);
   
+  epiphany_pose_measurement epiphany_pose_measurement;
+  epiphany_pose *epiphany_p = &epiphany_pose_measurement.pose;
+  QuaternionFromMatrix(transform, &epiphany_p->rw, &epiphany_p->rx, &epiphany_p->ry, &epiphany_p->rz);
+  PositionFromMatrix(transform, &epiphany_p->x, &epiphany_p->y, &epiphany_p->z);
+
+  // go to ubq format
+  epiphany_arkitToUbq(*epiphany_p, epiphany_p);
   
   // get the image
   // TODO: use jpeg instead! There is some implementation in ubiquity/expo from Ryan.
@@ -169,13 +166,72 @@ RCT_EXPORT_METHOD(enqueueSensorPacket:(nonnull NSNumber*)connectionHandle)
   
   // Voila our offset
   double ar_timestamp = (nowTimeIntervalSince1970 - uptime) + self.arSession.currentFrame.timestamp;
+
+  // make the image
+  epiphany_photo_measurement photo_measurement;
+  photo_measurement.raw_buffer = [nsData bytes];
+  photo_measurement.width = width;
+  photo_measurement.height = height;
+  photo_measurement.timestamp_seconds = ar_timestamp;
+  epiphany_pose_measurement.timestamp_seconds = ar_timestamp;
   
   // now build the sensor packet.
   int connection_handle = [connectionHandle intValue];
   epiphany_startBuildingSensorPacket(connection_handle, 0);
-  epiphany_addPose(connection_handle, x, y, z, rw, rx, ry, rz, ar_timestamp, 0);
-  epiphany_addPhoto(connection_handle, [nsData bytes], width, height, ar_timestamp, 0);
-  epiphany_finalizeSensorPacket(connection_handle, 0);
+  epiphany_addPose(connection_handle, epiphany_pose_measurement, 0);
+  epiphany_addPhoto(connection_handle, photo_measurement, 0);
+  int sp_id = epiphany_finalizeSensorPacket(connection_handle, 0);
+  NSInteger hdl = (NSInteger)sp_id;
+  NSDictionary *response = @{ @"sensor_packet_id" : @(hdl)};
+
+  resolve(response);
 }
+
+RCT_REMAP_METHOD(getTrackingUpdateIdentifier,
+                 getTrackingUpdateIdentifierWithHandle:(nonnull NSNumber *)connectionHandle
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  int identifier = epiphany_getTrackingUpdateIdentifier([connectionHandle intValue]);
+  NSInteger hdl = (NSInteger)identifier;
+  NSDictionary *response = @{ @"tracking_update_identifier" : @(hdl)};
+  resolve(response);
+}
+
+RCT_REMAP_METHOD(getSensorPacketStatus,
+                 getSensorPacketStatusWithHandle:(nonnull NSNumber *)connectionHandle
+                 sensorPacketId:(nonnull NSNumber *)sensorPacketId
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  int status = epiphany_getSensorPacketStatus(
+      [connectionHandle intValue],
+      [sensorPacketId intValue]
+      );
+
+  
+  if (status == 0)
+  {
+    NSDictionary *response = @{ @"status" : @"pending"};
+    resolve(response);
+  }
+  else if (status == 1)
+  {
+    NSDictionary *response = @{ @"status" : @"success"};
+    resolve(response);
+  }
+  else if (status == 2)
+  {
+    NSDictionary *response = @{ @"status" : @"failure"};
+    resolve(response);
+  }
+  else
+  {
+    NSString *errMsg = @"Unknown status int.";
+    reject(@"E_UNKNOWN_FAILURE", errMsg, RCTErrorWithMessage(errMsg));
+  }
+}
+
+
 
 @end

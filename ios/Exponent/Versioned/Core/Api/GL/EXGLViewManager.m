@@ -26,7 +26,7 @@ RCT_EXPORT_MODULE(ExponentGLViewManager);
 
 + (BOOL)requiresMainQueueSetup
 {
-  return YES;
+  return NO;
 }
 
 /*

@@ -32,11 +32,10 @@ RCT_EXPORT_MODULE(ExponentGLObjectManager);
   return YES;
 }
 
-/*
 - (dispatch_queue_t)methodQueue
 {
   return dispatch_queue_create("host.exp.exponent.GLObjectManager", DISPATCH_QUEUE_SERIAL);
-}*/
+}
 
 RCT_EXPORT_METHOD(destroyObjectAsync:(nonnull NSNumber *)exglObjId)
 {
