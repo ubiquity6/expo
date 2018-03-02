@@ -284,6 +284,7 @@
 		B5FB74F01FF6DADC001C764B /* EXScopedBridgeModule.m in Sources */ = {isa = PBXBuildFile; fileRef = B5FB74261FF6DADB001C764B /* EXScopedBridgeModule.m */; };
 		B5FB74F11FF6DADC001C764B /* EXScopedEventEmitter.m in Sources */ = {isa = PBXBuildFile; fileRef = B5FB74281FF6DADB001C764B /* EXScopedEventEmitter.m */; };
 		BBD03196200011C9009F0434 /* RNAWSCognito.m in Sources */ = {isa = PBXBuildFile; fileRef = BBD03192200011C9009F0434 /* RNAWSCognito.m */; };
+		EFDC2B012040E006004F17CD /* EpiphanyManager.m in Sources */ = {isa = PBXBuildFile; fileRef = EFDC2B002040E006004F17CD /* EpiphanyManager.m */; };
 		F1A4595220187C2B00C9704B /* EXGLCameraObject.m in Sources */ = {isa = PBXBuildFile; fileRef = F1A4595120187C2A00C9704B /* EXGLCameraObject.m */; };
 		F77DDB931E04AC1100624CA2 /* SafariServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F77DDB921E04AC1100624CA2 /* SafariServices.framework */; };
 /* End PBXBuildFile section */
@@ -859,6 +860,8 @@
 		BBD03192200011C9009F0434 /* RNAWSCognito.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = RNAWSCognito.m; sourceTree = "<group>"; };
 		BD69154E1D289060B003BB86 /* Pods-Exponent.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Exponent.release.xcconfig"; path = "Pods/Target Support Files/Pods-Exponent/Pods-Exponent.release.xcconfig"; sourceTree = "<group>"; };
 		D045154CF3903164C70A59B6 /* Pods-ExponentIntegrationTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ExponentIntegrationTests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-ExponentIntegrationTests/Pods-ExponentIntegrationTests.debug.xcconfig"; sourceTree = "<group>"; };
+		EFDC2AFF2040E006004F17CD /* EpiphanyManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EpiphanyManager.h; sourceTree = "<group>"; };
+		EFDC2B002040E006004F17CD /* EpiphanyManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = EpiphanyManager.m; sourceTree = "<group>"; };
 		F1A4595020187C2A00C9704B /* EXGLCameraObject.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EXGLCameraObject.h; sourceTree = "<group>"; };
 		F1A4595120187C2A00C9704B /* EXGLCameraObject.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = EXGLCameraObject.m; sourceTree = "<group>"; };
 		F77DDB921E04AC1100624CA2 /* SafariServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SafariServices.framework; path = System/Library/Frameworks/SafariServices.framework; sourceTree = SDKROOT; };
@@ -1180,6 +1183,7 @@
 		B5812C331C9CD59200A10345 /* Versioned */ = {
 			isa = PBXGroup;
 			children = (
+				EFDC2AFE2040E006004F17CD /* Epiphany */,
 				B5FB72701FF6DADB001C764B /* Core */,
 				B5BC7B031FF6DA7B00F102C1 /* Optional */,
 			);
@@ -1888,6 +1892,15 @@
 			path = Cognito;
 			sourceTree = "<group>";
 		};
+		EFDC2AFE2040E006004F17CD /* Epiphany */ = {
+			isa = PBXGroup;
+			children = (
+				EFDC2AFF2040E006004F17CD /* EpiphanyManager.h */,
+				EFDC2B002040E006004F17CD /* EpiphanyManager.m */,
+			);
+			path = Epiphany;
+			sourceTree = "<group>";
+		};
 		FBBF25BCC6E70D733A60A01D /* Pods */ = {
 			isa = PBXGroup;
 			children = (
@@ -1966,7 +1979,7 @@
 				TargetAttributes = {
 					78CEE2BF1ACD07D70095B124 = {
 						CreatedOnToolsVersion = 6.2;
-						DevelopmentTeam = C8D8QTF339;
+						DevelopmentTeam = 9YA7SJCLF7;
 						SystemCapabilities = {
 							com.apple.ApplePay = {
 								enabled = 0;
@@ -2194,7 +2207,25 @@
 			);
 			name = "[CP] Copy Pods Resources";
 			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/api.amplitude.com.der",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ComodoCaLimitedRsaCertificationAuthority.der",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ComodoRsaCA.der",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ComodoRsaDomainValidationCA.der",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/FacebookSDKStrings.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup_amatorka.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup_miss_etikate.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup_soft_elegance_1.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup_soft_elegance_2.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GTMOAuth2ViewTouch.nib",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleMaps.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BCLjoy_100.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BCLlefteyeclosed_200.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BCLrighteyeclosed_200.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/LMprec_600.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/MFTprec_202.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/PFFprec_702.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleSignIn.bundle",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -2421,6 +2452,7 @@
 				B5FB74A71FF6DADC001C764B /* EXFingerprint.m in Sources */,
 				B5FB74AB1FF6DADC001C764B /* EXImagePicker.m in Sources */,
 				B5FB74D01FF6DADC001C764B /* EXAccelerometer.m in Sources */,
+				EFDC2B012040E006004F17CD /* EpiphanyManager.m in Sources */,
 				7846B22420355E9900638E43 /* RNSVGText.m in Sources */,
 				7846B21820355E9900638E43 /* RNSVGCircleManager.m in Sources */,
 				7846B21720355E9900638E43 /* RNSVGGroupManager.m in Sources */,
@@ -2730,8 +2762,27 @@
 				CODE_SIGN_ENTITLEMENTS = Exponent/Supporting/Exponent.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				DEVELOPMENT_TEAM = C8D8QTF339;
+				DEVELOPMENT_TEAM = 9YA7SJCLF7;
 				EX_BUNDLE_NAME = Expo;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"${PODS_ROOT}/Crashlytics/iOS\"",
+					"\"${PODS_ROOT}/FBAudienceNetwork\"",
+					"\"${PODS_ROOT}/Fabric/iOS\"",
+					"\"${PODS_ROOT}/Google-Mobile-Ads-SDK/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleAppUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleAuthUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleInterchangeUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleMaps/Base/Frameworks\"",
+					"\"${PODS_ROOT}/GoogleMaps/Maps/Frameworks\"",
+					"\"${PODS_ROOT}/GoogleMobileVision/Detector/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleMobileVision/FaceDetector/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleMobileVision/MVDataOutput/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleNetworkingUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleSymbolUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleUtilities/Frameworks/frameworks\"",
+					"\"/U",
+				);
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Exponent/Supporting/Exponent-Prefix.pch";
 				INFOPLIST_FILE = Exponent/Supporting/Info.plist;
@@ -2784,7 +2835,7 @@
 					"-Xlinker",
 					"-no_objc_category_merging",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "host.exp.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = host.ubq.Xanadu;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "$(APP_PROVISIONING_PROFILE)";
 				STRIP_STYLE = "non-global";
@@ -2800,8 +2851,27 @@
 				CODE_SIGN_ENTITLEMENTS = Exponent/Supporting/Exponent.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				DEVELOPMENT_TEAM = C8D8QTF339;
+				DEVELOPMENT_TEAM = 9YA7SJCLF7;
 				EX_BUNDLE_NAME = Expo;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"${PODS_ROOT}/Crashlytics/iOS\"",
+					"\"${PODS_ROOT}/FBAudienceNetwork\"",
+					"\"${PODS_ROOT}/Fabric/iOS\"",
+					"\"${PODS_ROOT}/Google-Mobile-Ads-SDK/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleAppUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleAuthUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleInterchangeUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleMaps/Base/Frameworks\"",
+					"\"${PODS_ROOT}/GoogleMaps/Maps/Frameworks\"",
+					"\"${PODS_ROOT}/GoogleMobileVision/Detector/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleMobileVision/FaceDetector/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleMobileVision/MVDataOutput/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleNetworkingUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleSymbolUtilities/Frameworks/frameworks\"",
+					"\"${PODS_ROOT}/GoogleUtilities/Frameworks/frameworks\"",
+					"\"/U",
+				);
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Exponent/Supporting/Exponent-Prefix.pch";
 				INFOPLIST_FILE = Exponent/Supporting/Info.plist;
@@ -2854,7 +2924,7 @@
 					"-Xlinker",
 					"-no_objc_category_merging",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "host.exp.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = host.ubq.Xanadu;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "$(APP_PROVISIONING_PROFILE)";
 				STRIP_STYLE = "non-global";
