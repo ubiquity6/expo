@@ -24,6 +24,8 @@ DerivedData
 **/.idea/vcs.xml
 *.iml
 .gradle
+/app/build/generated
+/app/build/intermediates
 /android/app/build
 /android/build
 /android/captures
