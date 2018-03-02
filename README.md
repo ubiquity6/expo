@@ -13,8 +13,8 @@ correct location. So:
     /expo
 - Go into ubiquity-monorepo and run:
 ```
-  bazel build epiphany/ios:Epiphany --ios_multi_cpus=arm64 --copt=-fembed-bitcode  --ios_sdk_version=11.2 
-  python epiphany/ios/make_podspec.py
+  bazel build ubq/epiphany/ios:Epiphany --ios_multi_cpus=arm64 --copt=-fembed-bitcode  --ios_sdk_version=11.2 
+  python ubq/epiphany/ios/make_podspec.py
 ```
 
 - Now return to this expo repo and follow the instructions below (provided by Expo itself -- it's in
