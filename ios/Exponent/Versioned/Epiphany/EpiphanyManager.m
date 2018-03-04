@@ -5,14 +5,23 @@
 
 #include "math.h"
 
+#import <CoreLocation/CLLocationManager.h>
 #import <ARKit/ARKit.h>
 #import <React/RCTLog.h>
 #import <React/RCTUIManager.h>
 
 #import <Epiphany/Epiphany.h>
 
+/****************************************************************************************************
+ * NOTE(AK): The GPS functionality here is hastily done. It may make more sense to just use Expo's
+ * Location services directly and pass the result in to the enqueueSensorPacket call. Of course
+ * eventually we may as well make sure our implementation here is good.
+ ****************************************************************************************************/
+
 @interface EpiphanyManager ()
 @property (nonatomic, weak) ARSession *arSession;
+@property (strong, nonatomic) CLLocationManager *locationManager;
+@property double lastTime;
 @end
 
 @implementation EpiphanyManager
@@ -54,6 +63,32 @@ void PositionFromMatrix(matrix_float4x4 m, float* x, float* y, float* z)
   *z = m.columns[3].z;
 }
 RCT_EXPORT_MODULE(EpiphanyManager)
+
+RCT_REMAP_METHOD(turnOnGPS,
+                 turnOnGPSWithOptions: (NSDictionary *)options
+                             resolver: (RCTPromiseResolveBlock)resolve
+                             rejecter: (RCTPromiseRejectBlock)reject)
+{
+  _lastTime = 0;
+
+  RCTLogInfo(@"Turning on GPS!");
+  _locationManager = [[CLLocationManager alloc] init];
+  [_locationManager setDelegate:self];
+  [_locationManager setDistanceFilter:kCLDistanceFilterNone];
+  [_locationManager setDesiredAccuracy:kCLLocationAccuracyThreeKilometers];
+  // Set a movement threshold for new events.
+  [_locationManager requestWhenInUseAuthorization];
+  [_locationManager startUpdatingLocation];
+  resolve(@"success");
+  RCTLogInfo(@"GPS turned on!");
+}
+
+RCT_EXPORT_METHOD(turnOffGPS)
+{
+  [_locationManager stopUpdatingLocation];
+  self.locationManager = nil;
+  _lastTime = 0;
+}
 
 RCT_REMAP_METHOD(openAtlasConnection,
                  openAtlasConnectionWithOptions: (NSDictionary *)options
@@ -180,6 +215,27 @@ RCT_REMAP_METHOD(enqueueSensorPacket,
   epiphany_startBuildingSensorPacket(connection_handle, 0);
   epiphany_addPose(connection_handle, epiphany_pose_measurement, 0);
   epiphany_addPhoto(connection_handle, photo_measurement, 0);
+
+
+  if (_locationManager != nil)
+  {
+    CLLocation *lastKnown = [_locationManager location];
+    double gpstime_seconds = [lastKnown.timestamp timeIntervalSince1970];
+    if (gpstime_seconds > _lastTime)
+    {
+      _lastTime = gpstime_seconds;
+      epiphany_gps_measurement gps_measurement;
+      gps_measurement.timestamp_seconds = gpstime_seconds;
+      gps_measurement.lat = lastKnown.coordinate.latitude;
+      gps_measurement.lon = lastKnown.coordinate.longitude;
+      gps_measurement.alt = lastKnown.altitude;
+      gps_measurement.horizontal_accuracy = lastKnown.horizontalAccuracy;
+      gps_measurement.vertical_accuracy = lastKnown.verticalAccuracy;
+      RCTLogInfo(@"Adding GPS!");
+      epiphany_addGPS(connection_handle, gps_measurement, 0);
+    }
+  }
+
   int sp_id = epiphany_finalizeSensorPacket(connection_handle, 0);
   NSInteger hdl = (NSInteger)sp_id;
   NSDictionary *response = @{ @"sensor_packet_id" : @(hdl)};
