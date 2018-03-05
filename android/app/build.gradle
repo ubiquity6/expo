@@ -9,7 +9,7 @@ buildscript {
 }
 apply plugin: 'com.android.application'
 apply plugin: 'io.fabric'
-apply plugin: 'com.neenbedankt.android-apt'
+//apply plugin: 'com.neenbedankt.android-apt' TODO
 
 repositories {
   maven { url 'https://maven.fabric.io/public' }
@@ -17,7 +17,7 @@ repositories {
 
 android {
   compileSdkVersion 26
-  buildToolsVersion '26.0.1'
+  buildToolsVersion '26.0.2'
 
   defaultConfig {
     applicationId 'host.exp.exponent'
@@ -36,29 +36,42 @@ android {
     manifestPlaceholders = [
       'appAuthRedirectScheme': 'host.exp.exponent'
     ]
+
+    // TODO javacompileoptions used below is deprecated but used as workaround for gradle 3.0 compat
+    javaCompileOptions {
+      annotationProcessorOptions {
+        includeCompileClasspath = true
+      }
+    }
   }
   dexOptions {
     javaMaxHeapSize System.getenv("DISABLE_DEX_MAX_HEAP") ? null : "8g"
   }
+
+  flavorDimensions "development", "production" 
   productFlavors {
     // Define separate dev and prod product flavors.
     dev {
       // dev utilizes minSDKVersion = 21 to allow the Android gradle plugin
       // to pre-dex each module and produce an APK that can be tested on
       // Android Lollipop without time consuming dex merging processes.
-      minSdkVersion 21
+      minSdkVersion 24
+      dimension "development"
     }
     devRemoteKernel {
-      minSdkVersion 21
+      minSdkVersion 24
+      dimension "development"
     }
     dev19 {
       // For debugging / development on older SDK versions. Increases build
       // time so use 'dev' if not running on older SDKs.
-      minSdkVersion 19
+      minSdkVersion 21
+      dimension "development"
     }
     prod {
       // The actual minSdkVersion for the application.
-      minSdkVersion 19
+      minSdkVersion 24
+      dimension "production"
     }
   }
   buildTypes {
@@ -103,6 +116,8 @@ preBuild.dependsOn exponentPrebuildStep
 END UNCOMMENT WHEN DISTRIBUTING */
 
 dependencies {
+  implementation 'com.google.ar:core:1.0.0'
+
   compile fileTree(dir: 'libs', include: ['*.jar'])
 
   compile 'com.android.support:multidex:1.0.1'
@@ -128,7 +143,7 @@ dependencies {
   compile 'com.google.android.gms:play-services-auth:9.8.0'
   compile 'com.google.android.gms:play-services-location:9.8.0'
   compile 'com.google.android.gms:play-services-ads:9.8.0'
-  apt 'com.raizlabs.android:DBFlow-Compiler:2.2.1'
+  //apt 'com.raizlabs.android:DBFlow-Compiler:2.2.1' TODO remove apt gracefully
   compile "com.raizlabs.android:DBFlow-Core:2.2.1"
   compile "com.raizlabs.android:DBFlow:2.2.1"
   compile "com.madgag.spongycastle:core:1.53.0.0"

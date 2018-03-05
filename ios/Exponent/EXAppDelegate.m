@@ -12,6 +12,8 @@
 #import "EXRootViewController.h"
 #import "EXConstants.h"
 
+#import "Firebase.h"
+
 NS_ASSUME_NONNULL_BEGIN
 
 @interface ExpoKit (Crashlytics) <CrashlyticsDelegate>
@@ -25,6 +27,8 @@ NS_ASSUME_NONNULL_BEGIN
   CrashlyticsKit.delegate = [ExpoKit sharedInstance]; // this must be set prior to init'ing fabric.
   [Fabric with:@[CrashlyticsKit]];
   [CrashlyticsKit setObjectValue:[EXBuildConstants sharedInstance].expoRuntimeVersion forKey:@"exp_client_version"];
+  
+  [FIRApp configure];
 
   [[ExpoKit sharedInstance] registerRootViewControllerClass:[EXRootViewController class]];
   [[ExpoKit sharedInstance] application:application didFinishLaunchingWithOptions:launchOptions];

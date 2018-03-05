@@ -286,6 +286,9 @@
 		BBD03196200011C9009F0434 /* RNAWSCognito.m in Sources */ = {isa = PBXBuildFile; fileRef = BBD03192200011C9009F0434 /* RNAWSCognito.m */; };
 		F1A4595220187C2B00C9704B /* EXGLCameraObject.m in Sources */ = {isa = PBXBuildFile; fileRef = F1A4595120187C2A00C9704B /* EXGLCameraObject.m */; };
 		F77DDB931E04AC1100624CA2 /* SafariServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F77DDB921E04AC1100624CA2 /* SafariServices.framework */; };
+		FBF5FD5C20479C2D00CDE3B7 /* EpiphanyManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5FD5A20479C2D00CDE3B7 /* EpiphanyManager.m */; };
+		FBF5FD5E2047A38000CDE3B7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FBF5FD5D2047A38000CDE3B7 /* GoogleService-Info.plist */; };
+		FBF5FD66204876AA00CDE3B7 /* FBAnalytics.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5FD65204876AA00CDE3B7 /* FBAnalytics.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -863,6 +866,11 @@
 		F1A4595120187C2A00C9704B /* EXGLCameraObject.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = EXGLCameraObject.m; sourceTree = "<group>"; };
 		F77DDB921E04AC1100624CA2 /* SafariServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SafariServices.framework; path = System/Library/Frameworks/SafariServices.framework; sourceTree = SDKROOT; };
 		F8B7CBE8449DB220A8A6DF82 /* Pods-Exponent.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Exponent.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Exponent/Pods-Exponent.debug.xcconfig"; sourceTree = "<group>"; };
+		FBF5FD5A20479C2D00CDE3B7 /* EpiphanyManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = EpiphanyManager.m; sourceTree = "<group>"; };
+		FBF5FD5B20479C2D00CDE3B7 /* EpiphanyManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EpiphanyManager.h; sourceTree = "<group>"; };
+		FBF5FD5D2047A38000CDE3B7 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		FBF5FD60204875B300CDE3B7 /* FBAnalytics.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FBAnalytics.h; sourceTree = "<group>"; };
+		FBF5FD65204876AA00CDE3B7 /* FBAnalytics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FBAnalytics.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1094,6 +1102,7 @@
 				B55FDEF91C7FE1310020AA8F /* EXRootViewController.m */,
 				78CEE2D01ACD07D70095B124 /* Images.xcassets */,
 				78CEE2D21ACD07D70095B124 /* LaunchScreen.xib */,
+				FBF5FD5D2047A38000CDE3B7 /* GoogleService-Info.plist */,
 			);
 			path = Exponent;
 			sourceTree = "<group>";
@@ -1180,6 +1189,8 @@
 		B5812C331C9CD59200A10345 /* Versioned */ = {
 			isa = PBXGroup;
 			children = (
+				FBF5FD5F2048758B00CDE3B7 /* FBAnalytics */,
+				FBF5FD5920479BED00CDE3B7 /* Epiphany */,
 				B5FB72701FF6DADB001C764B /* Core */,
 				B5BC7B031FF6DA7B00F102C1 /* Optional */,
 			);
@@ -1899,6 +1910,25 @@
 			name = Pods;
 			sourceTree = "<group>";
 		};
+		FBF5FD5920479BED00CDE3B7 /* Epiphany */ = {
+			isa = PBXGroup;
+			children = (
+				FBF5FD5B20479C2D00CDE3B7 /* EpiphanyManager.h */,
+				FBF5FD5A20479C2D00CDE3B7 /* EpiphanyManager.m */,
+			);
+			name = Epiphany;
+			path = "New Group";
+			sourceTree = "<group>";
+		};
+		FBF5FD5F2048758B00CDE3B7 /* FBAnalytics */ = {
+			isa = PBXGroup;
+			children = (
+				FBF5FD60204875B300CDE3B7 /* FBAnalytics.h */,
+				FBF5FD65204876AA00CDE3B7 /* FBAnalytics.m */,
+			);
+			path = FBAnalytics;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -1966,7 +1996,7 @@
 				TargetAttributes = {
 					78CEE2BF1ACD07D70095B124 = {
 						CreatedOnToolsVersion = 6.2;
-						DevelopmentTeam = C8D8QTF339;
+						DevelopmentTeam = 4M5XCWQ48N;
 						SystemCapabilities = {
 							com.apple.ApplePay = {
 								enabled = 0;
@@ -2018,6 +2048,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FBF5FD5E2047A38000CDE3B7 /* GoogleService-Info.plist in Resources */,
 				B5E49B571D1346FA00AA6436 /* Exponent.entitlements in Resources */,
 				B5E49B631D1347B800AA6436 /* EXSDKVersions.plist in Resources */,
 				B5E49B691D1348E800AA6436 /* EXShell.plist in Resources */,
@@ -2194,7 +2225,25 @@
 			);
 			name = "[CP] Copy Pods Resources";
 			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/api.amplitude.com.der",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ComodoCaLimitedRsaCertificationAuthority.der",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ComodoRsaCA.der",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ComodoRsaDomainValidationCA.der",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/FacebookSDKStrings.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup_amatorka.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup_miss_etikate.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup_soft_elegance_1.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lookup_soft_elegance_2.png",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GTMOAuth2ViewTouch.nib",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleMaps.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BCLjoy_100.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BCLlefteyeclosed_200.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BCLrighteyeclosed_200.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/LMprec_600.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/MFTprec_202.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/PFFprec_702.emd",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleSignIn.bundle",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -2421,6 +2470,7 @@
 				B5FB74A71FF6DADC001C764B /* EXFingerprint.m in Sources */,
 				B5FB74AB1FF6DADC001C764B /* EXImagePicker.m in Sources */,
 				B5FB74D01FF6DADC001C764B /* EXAccelerometer.m in Sources */,
+				FBF5FD5C20479C2D00CDE3B7 /* EpiphanyManager.m in Sources */,
 				7846B22420355E9900638E43 /* RNSVGText.m in Sources */,
 				7846B21820355E9900638E43 /* RNSVGCircleManager.m in Sources */,
 				7846B21720355E9900638E43 /* RNSVGGroupManager.m in Sources */,
@@ -2561,6 +2611,7 @@
 				B5FB742C1FF6DADB001C764B /* RNAdMobRewarded.m in Sources */,
 				B5FB74D71FF6DADC001C764B /* BranchUniversalObject+RNBranch.m in Sources */,
 				7846B20F20355E9900638E43 /* RNSVGClipPathManager.m in Sources */,
+				FBF5FD66204876AA00CDE3B7 /* FBAnalytics.m in Sources */,
 				B5FB74C91FF6DADC001C764B /* EXAudioRecordingPermissionRequester.m in Sources */,
 				B5FB744A1FF6DADB001C764B /* AIRGMSMarker.m in Sources */,
 				B5AC39B11E95A90B00540AA7 /* EXRemoteNotificationManager.m in Sources */,
@@ -2726,16 +2777,17 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F8B7CBE8449DB220A8A6DF82 /* Pods-Exponent.debug.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Exponent/Supporting/Exponent.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				DEVELOPMENT_TEAM = C8D8QTF339;
+				DEVELOPMENT_TEAM = 4M5XCWQ48N;
 				EX_BUNDLE_NAME = Expo;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Exponent/Supporting/Exponent-Prefix.pch";
 				INFOPLIST_FILE = Exponent/Supporting/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -2784,11 +2836,12 @@
 					"-Xlinker",
 					"-no_objc_category_merging",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "host.exp.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ubiquity6.ubiquity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "$(APP_PROVISIONING_PROFILE)";
 				STRIP_STYLE = "non-global";
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
 			};
 			name = Debug;
 		};
@@ -2796,16 +2849,17 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = BD69154E1D289060B003BB86 /* Pods-Exponent.release.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Exponent/Supporting/Exponent.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				DEVELOPMENT_TEAM = C8D8QTF339;
+				DEVELOPMENT_TEAM = 4M5XCWQ48N;
 				EX_BUNDLE_NAME = Expo;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Exponent/Supporting/Exponent-Prefix.pch";
 				INFOPLIST_FILE = Exponent/Supporting/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 11.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -2854,11 +2908,12 @@
 					"-Xlinker",
 					"-no_objc_category_merging",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "host.exp.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ubiquity6.ubiquity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "$(APP_PROVISIONING_PROFILE)";
 				STRIP_STYLE = "non-global";
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
 			};
 			name = Release;
 		};

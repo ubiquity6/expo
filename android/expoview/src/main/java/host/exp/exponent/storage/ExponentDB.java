@@ -4,7 +4,7 @@ package host.exp.exponent.storage;
 
 import android.util.Log;
 
-import com.raizlabs.android.dbflow.annotation.Database;
+import com.raizlabs.android.dbflow.annotation.Database; //TODO abt compatibility
 import com.raizlabs.android.dbflow.runtime.TransactionManager;
 import com.raizlabs.android.dbflow.runtime.transaction.BaseTransaction;
 import com.raizlabs.android.dbflow.runtime.transaction.SelectSingleModelTransaction;
@@ -64,6 +64,6 @@ public class ExponentDB {
       public boolean hasResult(BaseTransaction<ExperienceDBObject> transaction, ExperienceDBObject result) {
         return true;
       }
-    }, Condition.column(ExperienceDBObject$Table.ID).eq(experienceId)));
+    } )); //, Condition.column(ExperienceDBObject$Table.ID).eq(experienceId))); // TODO is it OK to comment this out?
   }
 }

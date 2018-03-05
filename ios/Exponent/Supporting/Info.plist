@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>ExpoU6</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.4.0</string>
+	<string>0.0.1</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleURLTypes</key>
@@ -45,7 +47,7 @@
 	<key>Fabric</key>
 	<dict>
 		<key>APIKey</key>
-		<string>a25fafe9f9edee11a9882b32e0cd7a26df6e2c42</string>
+		<string>81130e95ea13cd7ed9a4f455e96214902c721c99</string>
 		<key>Kits</key>
 		<array>
 			<dict>

@@ -7,20 +7,26 @@ apply plugin: 'signing'
 // 1) To install in local maven repo use :installArchives task
 // 2) To upload artifact to maven central use: :uploadArchives (you'd need to have the permission to do that)
 
+//TODO Fix this workaround
+
 def isReleaseBuild() {
-    return VERSION_NAME.contains('SNAPSHOT') == false
+  //  return VERSION_NAME.contains('SNAPSHOT') == false
+    return true
 }
 
 def getRepositoryUrl() {
-    return hasProperty('repositoryUrl') ? property('repositoryUrl') : "file:${System.env.HOME}/.m2/repository/"
+  //  return project.hasProperty('repositoryUrl') ? property('repositoryUrl') : "file:${System.env.HOME}/.m2/repository/"
+    return true
 }
 
 def getRepositoryUsername() {
-    return hasProperty('repositoryUsername') ? property('repositoryUsername') : ''
+  //  return project.hasProperty('repositoryUsername') ? property('repositoryUsername') : ''
+    return true
 }
 
 def getRepositoryPassword() {
-    return hasProperty('repositoryPassword') ? property('repositoryPassword') : ''
+   // return project.hasProperty('repositoryPassword') ? property('repositoryPassword') : ''
+    return true
 }
 
 def configureReactNativePom(def pom) {
