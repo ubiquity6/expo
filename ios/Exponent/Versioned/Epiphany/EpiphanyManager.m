@@ -7,6 +7,7 @@
 
 #import <CoreLocation/CLLocationManager.h>
 #import <ARKit/ARKit.h>
+#import <Vision/Vision.h>
 #import <React/RCTLog.h>
 #import <React/RCTUIManager.h>
 
@@ -90,6 +91,36 @@ RCT_EXPORT_METHOD(turnOffGPS)
   _lastTime = 0;
 }
 
+RCT_EXPORT_METHOD(detectQRCode)
+{
+  CVPixelBufferRef pixelBuffer = self.arSession.currentFrame.capturedImage;
+  VNDetectBarcodesRequest *req = [[VNDetectBarcodesRequest alloc] initWithCompletionHandler:(VNRequestCompletionHandler) ^(VNRequest *request, NSError *error){
+    dispatch_async(dispatch_get_main_queue(), ^{
+      RCTLogInfo(@"Detect Barcodes Request Handler!");
+      RCTLogInfo(@"Result count %d", request.results.count);
+      if (request.results.count > 0)
+      {
+        VNBarcodeObservation *obs = (VNBarcodeObservation *)request.results[0];
+        RCTLogInfo(obs.payloadStringValue);
+        RCTLogInfo(@"%f, %f", obs.bottomLeft.x, obs.bottomLeft.y);
+      }
+
+    });
+  }];
+  
+  NSArray *reqArray = @[req];
+  NSDictionary *options = [[NSDictionary alloc] init];
+
+  VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCVPixelBuffer:pixelBuffer options:options];
+  
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [handler performRequests:reqArray error:nil];
+  });
+  
+  CVPixelBufferUnlockBaseAddress(pixelBuffer, 0);
+  
+}
+
 RCT_REMAP_METHOD(openAtlasConnection,
                  openAtlasConnectionWithOptions: (NSDictionary *)options
                  resolver:(RCTPromiseResolveBlock)resolve
@@ -122,6 +153,37 @@ RCT_REMAP_METHOD(openAtlasConnection,
     resolve(response);
   }
 }
+
+RCT_REMAP_METHOD(openOfflineAtlasConnection,
+                 openOfflineAtlasConnectionWithOptions: (NSDictionary *)options
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  NSString *cache_dir = [RCTConvert NSString:options[@"cache_dir"]];
+  int num_workers = [RCTConvert int:options[@"num_workers"]];
+  int max_images = [RCTConvert int:options[@"max_images"]];
+
+
+  int connection_handle = epiphany_openOfflineAtlasConnection(
+        [cache_dir UTF8String],
+        num_workers,
+        max_images
+        );
+
+  if (connection_handle < 0)
+  {
+    NSString *errMsg = @"Unable to open atlas connection.";
+    reject(@"E_ATLAS_CONNECTION_FAILURE", errMsg, RCTErrorWithMessage(errMsg));
+  }
+  else
+  {
+    NSInteger hdl = (NSInteger)connection_handle;
+    NSDictionary *response = @{ @"connection_handle" : @(hdl)};
+
+    resolve(response);
+  }
+}
+
 
 RCT_EXPORT_METHOD(helloWorld) {
   int hello_world = 3;//epiphany_hello_world();
@@ -242,6 +304,21 @@ RCT_REMAP_METHOD(enqueueSensorPacket,
 
   resolve(response);
 }
+
+RCT_REMAP_METHOD(addSensorPacketCache,
+                 addSensorPacketCacheWithHandle:(nonnull NSNumber *)connectionHandle
+                                       cacheDir:(nonnull NSString *)cacheDirectory
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  
+  // now build the sensor packet.
+  int connection_handle = [connectionHandle intValue];
+  epiphany_addSensorPacketCache(connection_handle, [cacheDirectory UTF8String]);
+
+  resolve(@"success");
+}
+
 
 RCT_REMAP_METHOD(getTrackingUpdateIdentifier,
                  getTrackingUpdateIdentifierWithHandle:(nonnull NSNumber *)connectionHandle
