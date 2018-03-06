@@ -134,13 +134,15 @@ android {
   buildToolsVersion "26.0.1"
 
   defaultConfig {
-    minSdkVersion 19
+    minSdkVersion 24
     targetSdkVersion 25
     versionCode 1
     versionName "1.0"
     ndk {
       abiFilters 'armeabi-v7a', 'x86'
     }
+    multiDexEnabled true
+
     manifestPlaceholders = [
       'appAuthRedirectScheme': 'host.exp.exponent'
     ]
@@ -180,6 +182,7 @@ preBuild.dependsOn generateDynamicMacros
 dependencies {
   compile fileTree(dir: 'libs', include: ['*.jar'])
   compile 'com.android.support:multidex:1.0.1'
+  compile 'com.google.ar:core:1.0.0'
 
   // Current react native
   compile project(':ReactAndroid')

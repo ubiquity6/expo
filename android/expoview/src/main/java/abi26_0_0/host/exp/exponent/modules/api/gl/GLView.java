@@ -43,6 +43,25 @@ import static host.exp.exponent.exgl.EXGL.EXGLContextSetFlushMethod;
 import static host.exp.exponent.exgl.EXGL.EXGLContextGetObject;
 import host.exp.exponent.exgl.VersionedGLView;
 
+/// TODO Remove this
+/// test if ARCore classes can be imported
+
+import com.google.ar.core.Anchor;
+import com.google.ar.core.ArCoreApk;
+import com.google.ar.core.Camera;
+import com.google.ar.core.Config;
+import com.google.ar.core.Frame;
+import com.google.ar.core.HitResult;
+import com.google.ar.core.Plane;
+import com.google.ar.core.Point;
+import com.google.ar.core.Point.OrientationMode;
+import com.google.ar.core.PointCloud;
+import com.google.ar.core.Session;
+import com.google.ar.core.Trackable;
+import com.google.ar.core.TrackingState;
+
+
+
 public class GLView extends TextureView implements TextureView.SurfaceTextureListener, VersionedGLView  {
   private boolean mOnSurfaceCreateCalled = false;
   private int mEXGLCtxId = -1;
