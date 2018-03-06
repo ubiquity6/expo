@@ -154,6 +154,21 @@ RCT_REMAP_METHOD(openAtlasConnection,
   }
 }
 
+RCT_REMAP_METHOD(closeAtlasConnection,
+                 closeAtlasConnectionWithHandle:(nonnull NSNumber *)connectionHandle
+                                          flush:(BOOL)flushQueue
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+
+  int connection_handle = [connectionHandle intValue];
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+      epiphany_closeAtlasConnection(connection_handle, flushQueue);
+      resolve(@"success");
+      });
+}
+
+
 RCT_REMAP_METHOD(openOfflineAtlasConnection,
                  openOfflineAtlasConnectionWithOptions: (NSDictionary *)options
                  resolver:(RCTPromiseResolveBlock)resolve
