@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import abi26_0_0.host.exp.exponent.modules.api.gl.GLViewManagerARCore;
 import host.exp.exponent.ExponentManifest;
 import host.exp.exponent.analytics.EXL;
 import host.exp.exponent.kernel.ExperienceId;
@@ -217,6 +218,7 @@ public class ExponentPackage implements ReactPackage {
         new VideoViewManager(),
         new CameraViewManager(),
         new GLViewManager(),
+     //   new GLViewManagerARCore(),  //TODO understand this
         new NativeAdViewManager(reactContext),
         new BarCodeScannerViewManager(),
         new BannerViewManager(reactContext)
