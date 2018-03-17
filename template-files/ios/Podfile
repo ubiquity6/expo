@@ -1,5 +1,13 @@
 source 'https://github.com/CocoaPods/Specs.git'
-platform :ios, '9.0'
+platform :ios, '11.2'
+
+workspace 'Exponent.xcworkspace'
+
+${PODFILE_UNVERSIONED_RN_DEPENDENCY}
+
+target 'RNThread' do
+  project 'RNThreads/RNThread'
+end
 
 target '${TARGET_NAME}' do
 ${EXPONENT_CLIENT_DEPS}
@@ -12,7 +20,6 @@ ${EXPONENT_CLIENT_DEPS}
   # Ubiquity local (tmp)
   pod 'Epiphany', :path => '../../ubiquity-monorepo/EpiphanyFrameworkPodspecDirectory'
 
-${PODFILE_UNVERSIONED_RN_DEPENDENCY}
 ${PODFILE_VERSIONED_RN_DEPENDENCIES}
 
     # Build React Native with RCT_DEV enabled
