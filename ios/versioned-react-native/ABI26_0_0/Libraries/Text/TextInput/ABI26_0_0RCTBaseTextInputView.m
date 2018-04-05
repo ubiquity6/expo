@@ -17,11 +17,15 @@
 #import <ReactABI26_0_0/ABI26_0_0RCTUtils.h>
 #import <ReactABI26_0_0/UIView+ReactABI26_0_0.h>
 
+#import "ABI26_0_0RCTTextAttributes.h"
 #import "ABI26_0_0RCTTextSelection.h"
 
 @implementation ABI26_0_0RCTBaseTextInputView {
-  CGSize _previousContentSize;
+  __weak ABI26_0_0RCTBridge *_bridge;
+  __weak ABI26_0_0RCTEventDispatcher *_eventDispatcher;
   BOOL _hasInputAccesoryView;
+  NSString *_Nullable _predictedText;
+  NSInteger _nativeEventCount;
 }
 
 - (instancetype)initWithBridge:(ABI26_0_0RCTBridge *)bridge
@@ -31,8 +35,6 @@
   if (self = [super initWithFrame:CGRectZero]) {
     _bridge = bridge;
     _eventDispatcher = bridge.eventDispatcher;
-    _fontAttributes = [[ABI26_0_0RCTFontAttributes alloc] initWithAccessibilityManager:bridge.accessibilityManager];
-    _fontAttributes.delegate = self;
   }
 
   return self;
@@ -42,24 +44,38 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init)
 ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)decoder)
 ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
 
-- (id<ABI26_0_0RCTBackedTextInputViewProtocol>)backedTextInputView
+- (UIView<ABI26_0_0RCTBackedTextInputViewProtocol> *)backedTextInputView
 {
   ABI26_0_0RCTAssert(NO, @"-[ABI26_0_0RCTBaseTextInputView backedTextInputView] must be implemented in subclass.");
   return nil;
 }
 
-- (void)setFont:(UIFont *)font
-{
-  self.backedTextInputView.font = font;
-  [self invalidateContentSize];
-}
+#pragma mark - ABI26_0_0RCTComponent
 
-- (void)fontAttributesDidChangeWithFont:(UIFont *)font
+- (void)didUpdateReactABI26_0_0Subviews
 {
-  self.font = font;
+  // Do nothing.
 }
 
 #pragma mark - Properties
+
+- (void)setTextAttributes:(ABI26_0_0RCTTextAttributes *)textAttributes
+{
+  _textAttributes = textAttributes;
+  [self enforceTextAttributesIfNeeded];
+}
+
+- (void)enforceTextAttributesIfNeeded
+{
+  id<ABI26_0_0RCTBackedTextInputViewProtocol> backedTextInputView = self.backedTextInputView;
+  if (backedTextInputView.attributedText.string.length != 0) {
+    return;
+  }
+
+  backedTextInputView.font = _textAttributes.effectiveFont;
+  backedTextInputView.textColor = _textAttributes.effectiveForegroundColor;
+  backedTextInputView.textAlignment = _textAttributes.alignment;
+}
 
 - (void)setReactABI26_0_0PaddingInsets:(UIEdgeInsets)ReactABI26_0_0PaddingInsets
 {
@@ -77,12 +93,47 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
   [self setNeedsLayout];
 }
 
+- (NSAttributedString *)attributedText
+{
+  return self.backedTextInputView.attributedText;
+}
+
+- (void)setAttributedText:(NSAttributedString *)attributedText
+{
+  NSInteger eventLag = _nativeEventCount - _mostRecentEventCount;
+
+  if (eventLag == 0 && ![attributedText isEqualToAttributedString:self.backedTextInputView.attributedText]) {
+    UITextRange *selection = self.backedTextInputView.selectedTextRange;
+    NSInteger oldTextLength = self.backedTextInputView.attributedText.string.length;
+
+    self.backedTextInputView.attributedText = attributedText;
+
+    if (selection.empty) {
+      // Maintaining a cursor position relative to the end of the old text.
+      NSInteger offsetStart =
+        [self.backedTextInputView offsetFromPosition:self.backedTextInputView.beginningOfDocument
+                                          toPosition:selection.start];
+      NSInteger offsetFromEnd = oldTextLength - offsetStart;
+      NSInteger newOffset = attributedText.string.length - offsetFromEnd;
+      UITextPosition *position =
+        [self.backedTextInputView positionFromPosition:self.backedTextInputView.beginningOfDocument
+                                                offset:newOffset];
+      [self.backedTextInputView setSelectedTextRange:[self.backedTextInputView textRangeFromPosition:position toPosition:position]
+                                      notifyDelegate:YES];
+    }
+
+    [self updateLocalData];
+  } else if (eventLag > ABI26_0_0RCTTextUpdateLagWarningThreshold) {
+    ABI26_0_0RCTLogWarn(@"Native TextInput(%@) is %lld events ahead of JS - try to make your JS faster.", self.backedTextInputView.attributedText.string, (long long)eventLag);
+  }
+}
+
 - (ABI26_0_0RCTTextSelection *)selection
 {
-  id<ABI26_0_0RCTBackedTextInputViewProtocol> backedTextInput = self.backedTextInputView;
-  UITextRange *selectedTextRange = backedTextInput.selectedTextRange;
-  return [[ABI26_0_0RCTTextSelection new] initWithStart:[backedTextInput offsetFromPosition:backedTextInput.beginningOfDocument toPosition:selectedTextRange.start]
-                                           end:[backedTextInput offsetFromPosition:backedTextInput.beginningOfDocument toPosition:selectedTextRange.end]];
+  id<ABI26_0_0RCTBackedTextInputViewProtocol> backedTextInputView = self.backedTextInputView;
+  UITextRange *selectedTextRange = backedTextInputView.selectedTextRange;
+  return [[ABI26_0_0RCTTextSelection new] initWithStart:[backedTextInputView offsetFromPosition:backedTextInputView.beginningOfDocument toPosition:selectedTextRange.start]
+                                           end:[backedTextInputView offsetFromPosition:backedTextInputView.beginningOfDocument toPosition:selectedTextRange.end]];
 }
 
 - (void)setSelection:(ABI26_0_0RCTTextSelection *)selection
@@ -91,18 +142,18 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
     return;
   }
 
-  id<ABI26_0_0RCTBackedTextInputViewProtocol> backedTextInput = self.backedTextInputView;
+  id<ABI26_0_0RCTBackedTextInputViewProtocol> backedTextInputView = self.backedTextInputView;
 
-  UITextRange *previousSelectedTextRange = backedTextInput.selectedTextRange;
-  UITextPosition *start = [backedTextInput positionFromPosition:backedTextInput.beginningOfDocument offset:selection.start];
-  UITextPosition *end = [backedTextInput positionFromPosition:backedTextInput.beginningOfDocument offset:selection.end];
-  UITextRange *selectedTextRange = [backedTextInput textRangeFromPosition:start toPosition:end];
+  UITextRange *previousSelectedTextRange = backedTextInputView.selectedTextRange;
+  UITextPosition *start = [backedTextInputView positionFromPosition:backedTextInputView.beginningOfDocument offset:selection.start];
+  UITextPosition *end = [backedTextInputView positionFromPosition:backedTextInputView.beginningOfDocument offset:selection.end];
+  UITextRange *selectedTextRange = [backedTextInputView textRangeFromPosition:start toPosition:end];
 
   NSInteger eventLag = _nativeEventCount - _mostRecentEventCount;
   if (eventLag == 0 && ![previousSelectedTextRange isEqual:selectedTextRange]) {
-    [backedTextInput setSelectedTextRange:selectedTextRange notifyDelegate:NO];
+    [backedTextInputView setSelectedTextRange:selectedTextRange notifyDelegate:NO];
   } else if (eventLag > ABI26_0_0RCTTextUpdateLagWarningThreshold) {
-    ABI26_0_0RCTLogWarn(@"Native TextInput(%@) is %lld events ahead of JS - try to make your JS faster.", backedTextInput.text, (long long)eventLag);
+    ABI26_0_0RCTLogWarn(@"Native TextInput(%@) is %lld events ahead of JS - try to make your JS faster.", backedTextInputView.attributedText.string, (long long)eventLag);
   }
 }
 
@@ -116,7 +167,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
 - (void)textInputDidBeginEditing
 {
   if (_clearTextOnFocus) {
-    self.backedTextInputView.text = @"";
+    self.backedTextInputView.attributedText = [NSAttributedString new];
   }
 
   if (_selectTextOnFocus) {
@@ -125,7 +176,27 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
 
   [_eventDispatcher sendTextEventWithType:ABI26_0_0RCTTextEventTypeFocus
                                  ReactABI26_0_0Tag:self.ReactABI26_0_0Tag
-                                     text:self.backedTextInputView.text
+                                     text:self.backedTextInputView.attributedText.string
+                                      key:nil
+                               eventCount:_nativeEventCount];
+}
+
+- (BOOL)textInputShouldEndEditing
+{
+  return YES;
+}
+
+- (void)textInputDidEndEditing
+{
+  [_eventDispatcher sendTextEventWithType:ABI26_0_0RCTTextEventTypeEnd
+                                 ReactABI26_0_0Tag:self.ReactABI26_0_0Tag
+                                     text:self.backedTextInputView.attributedText.string
+                                      key:nil
+                               eventCount:_nativeEventCount];
+
+  [_eventDispatcher sendTextEventWithType:ABI26_0_0RCTTextEventTypeBlur
+                                 ReactABI26_0_0Tag:self.ReactABI26_0_0Tag
+                                     text:self.backedTextInputView.attributedText.string
                                       key:nil
                                eventCount:_nativeEventCount];
 }
@@ -139,7 +210,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
   // (no connection to any specific "submitting" process).
   [_eventDispatcher sendTextEventWithType:ABI26_0_0RCTTextEventTypeSubmit
                                  ReactABI26_0_0Tag:self.ReactABI26_0_0Tag
-                                     text:self.backedTextInputView.text
+                                     text:self.backedTextInputView.attributedText.string
                                       key:nil
                                eventCount:_nativeEventCount];
 
@@ -151,6 +222,104 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
   // Does nothing.
 }
 
+- (BOOL)textInputShouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text
+{
+  id<ABI26_0_0RCTBackedTextInputViewProtocol> backedTextInputView = self.backedTextInputView;
+
+  if (!backedTextInputView.textWasPasted) {
+    [_eventDispatcher sendTextEventWithType:ABI26_0_0RCTTextEventTypeKeyPress
+                                   ReactABI26_0_0Tag:self.ReactABI26_0_0Tag
+                                       text:nil
+                                        key:text
+                                 eventCount:_nativeEventCount];
+  }
+
+  if (_maxLength) {
+    NSUInteger allowedLength = _maxLength.integerValue - backedTextInputView.attributedText.string.length + range.length;
+
+    if (text.length > allowedLength) {
+      // If we typed/pasted more than one character, limit the text inputted.
+      if (text.length > 1) {
+        // Truncate the input string so the result is exactly maxLength
+        NSString *limitedString = [text substringToIndex:allowedLength];
+        NSMutableAttributedString *newAttributedText = [backedTextInputView.attributedText mutableCopy];
+        [newAttributedText replaceCharactersInRange:range withString:limitedString];
+        backedTextInputView.attributedText = newAttributedText;
+        _predictedText = newAttributedText.string;
+
+        // Collapse selection at end of insert to match normal paste behavior.
+        UITextPosition *insertEnd = [backedTextInputView positionFromPosition:backedTextInputView.beginningOfDocument
+                                                                       offset:(range.location + allowedLength)];
+        [backedTextInputView setSelectedTextRange:[backedTextInputView textRangeFromPosition:insertEnd toPosition:insertEnd]
+                                   notifyDelegate:YES];
+
+        [self textInputDidChange];
+      }
+
+      return NO;
+    }
+  }
+
+  if (range.location + range.length > _predictedText.length) {
+    // _predictedText got out of sync in a bad way, so let's just force sync it.  Haven't been able to repro this, but
+    // it's causing a real crash here: #6523822
+    _predictedText = backedTextInputView.attributedText.string;
+  }
+
+  NSString *previousText = [_predictedText substringWithRange:range] ?: @"";
+
+  if (_predictedText) {
+    _predictedText = [_predictedText stringByReplacingCharactersInRange:range withString:text];
+  } else {
+    _predictedText = text;
+  }
+
+  if (_onTextInput) {
+    _onTextInput(@{
+      @"text": text,
+      @"previousText": previousText,
+      @"range": @{
+        @"start": @(range.location),
+        @"end": @(range.location + range.length)
+      },
+      @"eventCount": @(_nativeEventCount),
+    });
+  }
+
+  return YES;
+}
+
+- (void)textInputDidChange
+{
+  [self updateLocalData];
+
+  id<ABI26_0_0RCTBackedTextInputViewProtocol> backedTextInputView = self.backedTextInputView;
+
+  // Detect when `backedTextInputView` updates happend that didn't invoke `shouldChangeTextInRange`
+  // (e.g. typing simplified chinese in pinyin will insert and remove spaces without
+  // calling shouldChangeTextInRange).  This will cause JS to get out of sync so we
+  // update the mismatched range.
+  NSRange currentRange;
+  NSRange predictionRange;
+  if (findMismatch(backedTextInputView.attributedText.string, _predictedText, &currentRange, &predictionRange)) {
+    NSString *replacement = [backedTextInputView.attributedText.string substringWithRange:currentRange];
+    [self textInputShouldChangeTextInRange:predictionRange replacementText:replacement];
+    // JS will assume the selection changed based on the location of our shouldChangeTextInRange, so reset it.
+    [self textInputDidChangeSelection];
+    _predictedText = backedTextInputView.attributedText.string;
+  }
+
+  _nativeEventCount++;
+
+  if (_onChange) {
+    _onChange(@{
+       @"text": self.attributedText.string,
+       @"target": self.ReactABI26_0_0Tag,
+       @"eventCount": @(_nativeEventCount),
+    });
+  }
+}
+
 - (void)textInputDidChangeSelection
 {
   if (!_onSelectionChange) {
@@ -158,6 +327,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
   }
 
   ABI26_0_0RCTTextSelection *selection = self.selection;
+
   _onSelectionChange(@{
     @"selection": @{
       @"start": @(selection.start),
@@ -166,59 +336,12 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
   });
 }
 
-- (BOOL)textInputShouldEndEditing
+- (void)updateLocalData
 {
-  return YES;
-}
+  [self enforceTextAttributesIfNeeded];
 
-- (void)textInputDidEndEditing
-{
-  [_eventDispatcher sendTextEventWithType:ABI26_0_0RCTTextEventTypeEnd
-                                 ReactABI26_0_0Tag:self.ReactABI26_0_0Tag
-                                     text:self.backedTextInputView.text
-                                      key:nil
-                               eventCount:_nativeEventCount];
-
-  [_eventDispatcher sendTextEventWithType:ABI26_0_0RCTTextEventTypeBlur
-                                 ReactABI26_0_0Tag:self.ReactABI26_0_0Tag
-                                     text:self.backedTextInputView.text
-                                      key:nil
-                               eventCount:_nativeEventCount];
-}
-
-#pragma mark - Content Size (in Yoga terms, without any insets)
-
-- (CGSize)contentSize
-{
-  CGSize contentSize = self.backedTextInputView.contentSize;
-  UIEdgeInsets ReactABI26_0_0PaddingInsets = self.ReactABI26_0_0PaddingInsets;
-  contentSize.width -= ReactABI26_0_0PaddingInsets.left + ReactABI26_0_0PaddingInsets.right;
-  contentSize.height -= ReactABI26_0_0PaddingInsets.top + ReactABI26_0_0PaddingInsets.bottom;
-  // Returning value does NOT include border and padding insets.
-  return contentSize;
-}
-
-- (void)invalidateContentSize
-{
-  // Updates `contentSize` property and notifies Yoga about the change, if necessary.
-  CGSize contentSize = self.contentSize;
-
-  if (CGSizeEqualToSize(_previousContentSize, contentSize)) {
-    return;
-  }
-  _previousContentSize = contentSize;
-
-  [_bridge.uiManager setIntrinsicContentSize:contentSize forView:self];
-
-  if (_onContentSizeChange) {
-    _onContentSizeChange(@{
-      @"contentSize": @{
-        @"height": @(contentSize.height),
-        @"width": @(contentSize.width),
-      },
-      @"target": self.ReactABI26_0_0Tag,
-    });
-  }
+  [_bridge.uiManager setLocalData:[self.backedTextInputView.attributedText copy]
+                          forView:self];
 }
 
 #pragma mark - Layout (in UIKit terms, with all insets)
@@ -249,12 +372,6 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
 
   // Returning value DOES include border and padding insets.
   return fittingSize;
-}
-
-- (void)layoutSubviews
-{
-  [super layoutSubviews];
-  [self invalidateContentSize];
 }
 
 #pragma mark - Accessibility
@@ -341,6 +458,37 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
   if ([self textInputShouldReturn]) {
     [self.backedTextInputView endEditing:YES];
   }
+}
+
+#pragma mark - Helpers
+
+static BOOL findMismatch(NSString *first, NSString *second, NSRange *firstRange, NSRange *secondRange)
+{
+  NSInteger firstMismatch = -1;
+  for (NSUInteger ii = 0; ii < MAX(first.length, second.length); ii++) {
+    if (ii >= first.length || ii >= second.length || [first characterAtIndex:ii] != [second characterAtIndex:ii]) {
+      firstMismatch = ii;
+      break;
+    }
+  }
+
+  if (firstMismatch == -1) {
+    return NO;
+  }
+
+  NSUInteger ii = second.length;
+  NSUInteger lastMismatch = first.length;
+  while (ii > firstMismatch && lastMismatch > firstMismatch) {
+    if ([first characterAtIndex:(lastMismatch - 1)] != [second characterAtIndex:(ii - 1)]) {
+      break;
+    }
+    ii--;
+    lastMismatch--;
+  }
+
+  *firstRange = NSMakeRange(firstMismatch, lastMismatch - firstMismatch);
+  *secondRange = NSMakeRange(firstMismatch, ii - firstMismatch);
+  return YES;
 }
 
 @end

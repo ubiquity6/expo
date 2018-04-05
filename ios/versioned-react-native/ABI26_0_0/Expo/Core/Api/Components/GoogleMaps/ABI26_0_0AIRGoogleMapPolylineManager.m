@@ -26,6 +26,7 @@ ABI26_0_0RCT_EXPORT_MODULE()
 - (UIView *)view
 {
   ABI26_0_0AIRGoogleMapPolyline *polyline = [ABI26_0_0AIRGoogleMapPolyline new];
+  polyline.bridge = self.bridge;
   return polyline;
 }
 
@@ -35,5 +36,7 @@ ABI26_0_0RCT_EXPORT_VIEW_PROPERTY(strokeColor, UIColor)
 ABI26_0_0RCT_EXPORT_VIEW_PROPERTY(strokeWidth, double)
 ABI26_0_0RCT_EXPORT_VIEW_PROPERTY(geodesic, BOOL)
 ABI26_0_0RCT_EXPORT_VIEW_PROPERTY(zIndex, int)
+ABI26_0_0RCT_EXPORT_VIEW_PROPERTY(tappable, BOOL)
+ABI26_0_0RCT_EXPORT_VIEW_PROPERTY(onPress, ABI26_0_0RCTBubblingEventBlock)
 
 @end

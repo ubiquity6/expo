@@ -37,7 +37,6 @@ static SEL selectorForType(NSString *type)
   id<ABI26_0_0RCTComponent> _defaultView; // Only needed for ABI26_0_0RCT_CUSTOM_VIEW_PROPERTY
   ABI26_0_0RCTPropBlockDictionary *_viewPropBlocks;
   ABI26_0_0RCTPropBlockDictionary *_shadowPropBlocks;
-  BOOL _implementsUIBlockToAmendWithShadowViewRegistry;
   __weak ABI26_0_0RCTBridge *_bridge;
 }
 
@@ -53,16 +52,8 @@ static SEL selectorForType(NSString *type)
     _shadowPropBlocks = [NSMutableDictionary new];
 
     _name = moduleNameForClass(managerClass);
-
-    _implementsUIBlockToAmendWithShadowViewRegistry = NO;
-    Class cls = _managerClass;
-    while (cls != [ABI26_0_0RCTViewManager class]) {
-      _implementsUIBlockToAmendWithShadowViewRegistry = _implementsUIBlockToAmendWithShadowViewRegistry ||
-      ABI26_0_0RCTClassOverridesInstanceMethod(cls, @selector(uiBlockToAmendWithShadowViewRegistry:));
-      cls = [cls superclass];
-    }
-    _name = ABI26_0_0EX_REMOVE_VERSION(_name);
   }
+  _name = ABI26_0_0EX_REMOVE_VERSION(_name);
   return self;
 }
 
@@ -436,14 +427,6 @@ static ABI26_0_0RCTPropBlock createNSInvocationSetter(NSMethodSignature *typeSig
     @"bubblingEvents": bubblingEvents,
     @"baseModuleName": superClass == [NSObject class] ? (id)kCFNull : moduleNameForClass(superClass),
   };
-}
-
-- (ABI26_0_0RCTViewManagerUIBlock)uiBlockToAmendWithShadowViewRegistry:(NSDictionary<NSNumber *, ABI26_0_0RCTShadowView *> *)registry
-{
-  if (_implementsUIBlockToAmendWithShadowViewRegistry) {
-    return [[self manager] uiBlockToAmendWithShadowViewRegistry:registry];
-  }
-  return nil;
 }
 
 static NSString *moduleNameForClass(Class managerClass)

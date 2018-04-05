@@ -8,49 +8,22 @@
  */
 
 #import <ReactABI26_0_0/ABI26_0_0RCTShadowView.h>
-#import <ReactABI26_0_0/ABI26_0_0RCTTextDecorationLineType.h>
 
-typedef NS_ENUM(NSInteger, ABI26_0_0RCTSizeComparison)
-{
-  ABI26_0_0RCTSizeTooLarge,
-  ABI26_0_0RCTSizeTooSmall,
-  ABI26_0_0RCTSizeWithinRange,
-};
+#import "ABI26_0_0RCTBaseTextShadowView.h"
 
+NS_ASSUME_NONNULL_BEGIN
 
-extern NSString *const ABI26_0_0RCTIsHighlightedAttributeName;
-extern NSString *const ABI26_0_0RCTReactABI26_0_0TagAttributeName;
+@interface ABI26_0_0RCTTextShadowView : ABI26_0_0RCTBaseTextShadowView
 
-@interface ABI26_0_0RCTTextShadowView : ABI26_0_0RCTShadowView
+- (instancetype)initWithBridge:(ABI26_0_0RCTBridge *)bridge;
 
-@property (nonatomic, strong) UIColor *color;
-@property (nonatomic, strong) UIColor *backgroundColor;
-@property (nonatomic, copy) NSString *fontFamily;
-@property (nonatomic, assign) CGFloat fontSize;
-@property (nonatomic, copy) NSString *fontWeight;
-@property (nonatomic, copy) NSString *fontStyle;
-@property (nonatomic, copy) NSArray *fontVariant;
-@property (nonatomic, assign) BOOL isHighlighted;
-@property (nonatomic, assign) CGFloat letterSpacing;
-@property (nonatomic, assign) CGFloat lineHeight;
-@property (nonatomic, assign) NSUInteger numberOfLines;
-@property (nonatomic, assign) NSLineBreakMode ellipsizeMode;
-@property (nonatomic, assign) CGSize shadowOffset;
-@property (nonatomic, assign) NSTextAlignment textAlign;
-@property (nonatomic, assign) NSWritingDirection writingDirection;
-@property (nonatomic, strong) UIColor *textDecorationColor;
-@property (nonatomic, assign) NSUnderlineStyle textDecorationStyle;
-@property (nonatomic, assign) ABI26_0_0RCTTextDecorationLineType textDecorationLine;
-@property (nonatomic, assign) CGFloat fontSizeMultiplier;
-@property (nonatomic, assign) BOOL allowFontScaling;
-@property (nonatomic, assign) CGFloat opacity;
-@property (nonatomic, assign) CGSize textShadowOffset;
-@property (nonatomic, assign) CGFloat textShadowRadius;
-@property (nonatomic, strong) UIColor *textShadowColor;
+@property (nonatomic, assign) NSInteger maximumNumberOfLines;
+@property (nonatomic, assign) NSLineBreakMode lineBreakMode;
 @property (nonatomic, assign) BOOL adjustsFontSizeToFit;
 @property (nonatomic, assign) CGFloat minimumFontScale;
-@property (nonatomic, assign) BOOL selectable;
 
-- (void)recomputeText;
+- (void)uiManagerWillPerformMounting;
 
 @end
+
+NS_ASSUME_NONNULL_END

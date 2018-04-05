@@ -220,6 +220,9 @@ async function generateIOSBuildConstantsFromMacrosAsync(
       config.EXPO_RUNTIME_VERSION = infoPlistContents.CFBundleVersion
         ? infoPlistContents.CFBundleVersion
         : infoPlistContents.CFBundleShortVersionString;
+      if (!config.API_SERVER_ENDPOINT) {
+        config.API_SERVER_ENDPOINT = 'https://exp.host/--/api/v2/';
+      }
       if (keys) {
         const allowedKeys = ['AMPLITUDE_KEY', 'AMPLITUDE_DEV_KEY', 'GOOGLE_MAPS_IOS_API_KEY'];
         config.DEFAULT_API_KEYS = _.pickBy(keys, (value, key) => allowedKeys.includes(key));
@@ -428,6 +431,20 @@ async function writeIOSTemplatesAsync(platform, args, templateFilesPath, templat
       REACT_NATIVE_EXPO_SUBSPECS: ['Expo', 'ExpoOptional'],
     }
   );
+
+  // also render the Podfile for the OSS repo, if we're in universe
+  // stubbed in to eliminate the step of running this script before building the client from expo/expo
+  if (fs.existsSync(path.join(EXPONENT_DIR, 'ios', '__github__'))) {
+    await renderPodfileAsync(
+      path.join(templateFilesPath, platform, 'Podfile'),
+      path.join(EXPONENT_DIR, 'ios', '__github__', 'Podfile'),
+      {
+        TARGET_NAME: 'Exponent',
+        REACT_NATIVE_PATH: '../js/node_modules/react-native',
+        REACT_NATIVE_EXPO_SUBSPECS: ['Expo', 'ExpoOptional'],
+      }
+    )
+  }
 
   if (args.expoKitPath) {
     let expoKitPath = path.join(process.cwd(), args.expoKitPath);

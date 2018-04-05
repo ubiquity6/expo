@@ -16,31 +16,21 @@
 
 #import "ABI26_0_0RCTTextShadowView.h"
 
-static void collectNonTextDescendants(ABI26_0_0RCTTextView *view, NSMutableArray *nonTextDescendants)
-{
-  for (UIView *child in view.ReactABI26_0_0Subviews) {
-    if ([child isKindOfClass:[ABI26_0_0RCTTextView class]]) {
-      collectNonTextDescendants((ABI26_0_0RCTTextView *)child, nonTextDescendants);
-    } else if (!CGRectEqualToRect(child.frame, CGRectZero)) {
-      [nonTextDescendants addObject:child];
-    }
-  }
-}
-
 @implementation ABI26_0_0RCTTextView
 {
-  NSTextStorage *_textStorage;
   CAShapeLayer *_highlightLayer;
   UILongPressGestureRecognizer *_longPressGestureRecognizer;
+
+  NSArray<UIView *> *_Nullable _descendantViews;
+  NSTextStorage *_Nullable _textStorage;
+  CGRect _contentFrame;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
 {
-  if ((self = [super initWithFrame:frame])) {
-    _textStorage = [NSTextStorage new];
+  if (self = [super initWithFrame:frame]) {
     self.isAccessibilityElement = YES;
     self.accessibilityTraits |= UIAccessibilityTraitStaticText;
-
     self.opaque = NO;
     self.contentMode = UIViewContentModeRedraw;
   }
@@ -51,7 +41,7 @@ static void collectNonTextDescendants(ABI26_0_0RCTTextView *view, NSMutableArray
 {
   NSString *superDescription = super.description;
   NSRange semicolonRange = [superDescription rangeOfString:@";"];
-  NSString *replacement = [NSString stringWithFormat:@"; ReactABI26_0_0Tag: %@; text: %@", self.ReactABI26_0_0Tag, self.textStorage.string];
+  NSString *replacement = [NSString stringWithFormat:@"; ReactABI26_0_0Tag: %@; text: %@", self.ReactABI26_0_0Tag, _textStorage.string];
   return [superDescription stringByReplacingCharactersInRange:semicolonRange withString:replacement];
 }
 
@@ -86,54 +76,65 @@ static void collectNonTextDescendants(ABI26_0_0RCTTextView *view, NSMutableArray
 }
 
 - (void)setTextStorage:(NSTextStorage *)textStorage
+          contentFrame:(CGRect)contentFrame
+       descendantViews:(NSArray<UIView *> *)descendantViews
 {
-  if (_textStorage != textStorage) {
-    _textStorage = textStorage;
+  _textStorage = textStorage;
+  _contentFrame = contentFrame;
 
-    // Update subviews
-    NSMutableArray *nonTextDescendants = [NSMutableArray new];
-    collectNonTextDescendants(self, nonTextDescendants);
-    NSArray *subviews = self.subviews;
-    if (![subviews isEqualToArray:nonTextDescendants]) {
-      for (UIView *child in subviews) {
-        if (![nonTextDescendants containsObject:child]) {
-          [child removeFromSuperview];
-        }
-      }
-      for (UIView *child in nonTextDescendants) {
-        [self addSubview:child];
-      }
-    }
-
-    [self setNeedsDisplay];
+  // FIXME: Optimize this.
+  for (UIView *view in _descendantViews) {
+    [view removeFromSuperview];
   }
+
+  _descendantViews = descendantViews;
+
+  for (UIView *view in descendantViews) {
+    [self addSubview:view];
+  }
+
+  [self setNeedsDisplay];
 }
 
 - (void)drawRect:(CGRect)rect
 {
-  NSLayoutManager *layoutManager = [_textStorage.layoutManagers firstObject];
-  NSTextContainer *textContainer = [layoutManager.textContainers firstObject];
+  if (!_textStorage) {
+    return;
+  }
+
+
+  NSLayoutManager *layoutManager = _textStorage.layoutManagers.firstObject;
+  NSTextContainer *textContainer = layoutManager.textContainers.firstObject;
 
   NSRange glyphRange = [layoutManager glyphRangeForTextContainer:textContainer];
-  CGRect textFrame = self.textFrame;
-  [layoutManager drawBackgroundForGlyphRange:glyphRange atPoint:textFrame.origin];
-  [layoutManager drawGlyphsForGlyphRange:glyphRange atPoint:textFrame.origin];
+  [layoutManager drawBackgroundForGlyphRange:glyphRange atPoint:_contentFrame.origin];
+  [layoutManager drawGlyphsForGlyphRange:glyphRange atPoint:_contentFrame.origin];
 
   __block UIBezierPath *highlightPath = nil;
-  NSRange characterRange = [layoutManager characterRangeForGlyphRange:glyphRange actualGlyphRange:NULL];
-  [layoutManager.textStorage enumerateAttribute:ABI26_0_0RCTIsHighlightedAttributeName inRange:characterRange options:0 usingBlock:^(NSNumber *value, NSRange range, BOOL *_) {
-    if (!value.boolValue) {
-      return;
-    }
-
-    [layoutManager enumerateEnclosingRectsForGlyphRange:range withinSelectedGlyphRange:range inTextContainer:textContainer usingBlock:^(CGRect enclosingRect, __unused BOOL *__) {
-      UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(enclosingRect, -2, -2) cornerRadius:2];
-      if (highlightPath) {
-        [highlightPath appendPath:path];
-      } else {
-        highlightPath = path;
+  NSRange characterRange = [layoutManager characterRangeForGlyphRange:glyphRange
+                                                     actualGlyphRange:NULL];
+  [_textStorage enumerateAttribute:ABI26_0_0RCTTextAttributesIsHighlightedAttributeName
+                           inRange:characterRange
+                           options:0
+                        usingBlock:
+    ^(NSNumber *value, NSRange range, __unused BOOL *stop) {
+      if (!value.boolValue) {
+        return;
       }
-    }];
+
+      [layoutManager enumerateEnclosingRectsForGlyphRange:range
+                                 withinSelectedGlyphRange:range
+                                          inTextContainer:textContainer
+                                               usingBlock:
+        ^(CGRect enclosingRect, __unused BOOL *anotherStop) {
+          UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(enclosingRect, -2, -2) cornerRadius:2];
+          if (highlightPath) {
+            [highlightPath appendPath:path];
+          } else {
+            highlightPath = path;
+          }
+        }
+      ];
   }];
 
   if (highlightPath) {
@@ -142,13 +143,14 @@ static void collectNonTextDescendants(ABI26_0_0RCTTextView *view, NSMutableArray
       _highlightLayer.fillColor = [UIColor colorWithWhite:0 alpha:0.25].CGColor;
       [self.layer addSublayer:_highlightLayer];
     }
-    _highlightLayer.position = (CGPoint){_contentInset.left, _contentInset.top};
+    _highlightLayer.position = _contentFrame.origin;
     _highlightLayer.path = highlightPath.CGPath;
   } else {
     [_highlightLayer removeFromSuperlayer];
     _highlightLayer = nil;
   }
 }
+
 
 - (NSNumber *)ReactABI26_0_0TagAtPoint:(CGPoint)point
 {
@@ -164,8 +166,9 @@ static void collectNonTextDescendants(ABI26_0_0RCTTextView *view, NSMutableArray
   // If the point is not before (fraction == 0.0) the first character and not
   // after (fraction == 1.0) the last character, then the attribute is valid.
   if (_textStorage.length > 0 && (fraction > 0 || characterIndex > 0) && (fraction < 1 || characterIndex < _textStorage.length - 1)) {
-    ReactABI26_0_0Tag = [_textStorage attribute:ABI26_0_0RCTReactABI26_0_0TagAttributeName atIndex:characterIndex effectiveRange:NULL];
+    ReactABI26_0_0Tag = [_textStorage attribute:ABI26_0_0RCTTextAttributesTagAttributeName atIndex:characterIndex effectiveRange:NULL];
   }
+
   return ReactABI26_0_0Tag;
 }
 
@@ -179,11 +182,10 @@ static void collectNonTextDescendants(ABI26_0_0RCTTextView *view, NSMutableArray
       [_highlightLayer removeFromSuperlayer];
       _highlightLayer = nil;
     }
-  } else if (_textStorage.length) {
+  } else if (_textStorage) {
     [self setNeedsDisplay];
   }
 }
-
 
 #pragma mark - Accessibility
 
@@ -245,19 +247,19 @@ static void collectNonTextDescendants(ABI26_0_0RCTTextView *view, NSMutableArray
 - (void)copy:(id)sender
 {
 #if !TARGET_OS_TV
-  NSAttributedString *attributedString = _textStorage;
+  NSAttributedString *attributedText = _textStorage;
 
   NSMutableDictionary *item = [NSMutableDictionary new];
 
-  NSData *rtf = [attributedString dataFromRange:NSMakeRange(0, attributedString.length)
-                             documentAttributes:@{NSDocumentTypeDocumentAttribute: NSRTFDTextDocumentType}
-                                          error:nil];
+  NSData *rtf = [attributedText dataFromRange:NSMakeRange(0, attributedText.length)
+                           documentAttributes:@{NSDocumentTypeDocumentAttribute: NSRTFDTextDocumentType}
+                                        error:nil];
 
   if (rtf) {
     [item setObject:rtf forKey:(id)kUTTypeFlatRTFD];
   }
 
-  [item setObject:attributedString.string forKey:(id)kUTTypeUTF8PlainText];
+  [item setObject:attributedText.string forKey:(id)kUTTypeUTF8PlainText];
 
   UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
   pasteboard.items = @[item];

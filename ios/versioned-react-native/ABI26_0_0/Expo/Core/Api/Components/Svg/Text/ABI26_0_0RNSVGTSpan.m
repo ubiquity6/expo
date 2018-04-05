@@ -11,7 +11,7 @@
 #import "ABI26_0_0RNSVGTextProperties.h"
 #import "ABI26_0_0RNSVGFontData.h"
 
-NSCharacterSet *ABI26_0_0RNSVGseparators = nil;
+NSCharacterSet *ABI26_0_0separators = nil;
 static double radToDeg = 180 / M_PI;
 
 @implementation ABI26_0_0RNSVGTSpan
@@ -30,8 +30,8 @@ static double radToDeg = 180 / M_PI;
 {
     self = [super init];
 
-    if (ABI26_0_0RNSVGseparators == nil) {
-        ABI26_0_0RNSVGseparators = [NSCharacterSet whitespaceCharacterSet];
+    if (ABI26_0_0separators == nil) {
+        ABI26_0_0separators = [NSCharacterSet whitespaceCharacterSet];
     }
 
     return self;
@@ -703,7 +703,7 @@ static double radToDeg = 180 / M_PI;
 
             CFIndex currIndex = indices[g];
             char currentChar = [str characterAtIndex:currIndex];
-            bool isWordSeparator = [ABI26_0_0RNSVGseparators characterIsMember:currentChar];
+            bool isWordSeparator = [ABI26_0_0separators characterIsMember:currentChar];
             double wordSpace = isWordSeparator ? wordSpacing : 0;
             double spacing = wordSpace + letterSpacing;
             double advance = charWidth + spacing;

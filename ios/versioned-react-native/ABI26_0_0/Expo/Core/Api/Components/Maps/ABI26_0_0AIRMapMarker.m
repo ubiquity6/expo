@@ -14,8 +14,11 @@
 #import <ReactABI26_0_0/ABI26_0_0RCTImageLoader.h>
 #import <ReactABI26_0_0/ABI26_0_0RCTUtils.h>
 #import <ReactABI26_0_0/UIView+ReactABI26_0_0.h>
+NSInteger const ReactABI26_0_0CALLOUT_OPEN_ZINDEX_BASELINE = 999;
 
 @implementation ABI26_0_0AIREmptyCalloutBackgroundView
+bool ReactABI26_0_0_calloutIsOpen = NO;
+NSInteger ReactABI26_0_0_zIndexBeforeOpen = 0;
 @end
 
 @implementation ABI26_0_0AIRMapMarker {
@@ -137,6 +140,9 @@
 
 - (void)showCalloutView
 {
+    ReactABI26_0_0_calloutIsOpen = YES;
+    [self setZIndex:ReactABI26_0_0_zIndexBeforeOpen];
+    
     MKAnnotationView *annotationView = [self getAnnotationView];
 
     [self setSelected:YES animated:NO];
@@ -222,6 +228,8 @@
 
 - (void)hideCalloutView
 {
+    ReactABI26_0_0_calloutIsOpen = NO;
+    [self setZIndex:ReactABI26_0_0_zIndexBeforeOpen];
     // hide the callout view
     [self.map.calloutView dismissCalloutAnimated:YES];
 
@@ -298,8 +306,9 @@
 
 - (void)setZIndex:(NSInteger)zIndex
 {
-    _zIndex = zIndex;
-    self.layer.zPosition = _zIndex;
+    ReactABI26_0_0_zIndexBeforeOpen = zIndex;
+    _zIndex = ReactABI26_0_0_calloutIsOpen ? zIndex + ReactABI26_0_0CALLOUT_OPEN_ZINDEX_BASELINE : zIndex;
+    self.layer.zPosition = zIndex;
 }
 
 @end

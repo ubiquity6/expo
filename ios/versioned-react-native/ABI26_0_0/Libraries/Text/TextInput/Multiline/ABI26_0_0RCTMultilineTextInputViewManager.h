@@ -9,6 +9,10 @@
 
 #import "ABI26_0_0RCTBaseTextInputViewManager.h"
 
+NS_ASSUME_NONNULL_BEGIN
+
 @interface ABI26_0_0RCTMultilineTextInputViewManager : ABI26_0_0RCTBaseTextInputViewManager
 
 @end
+
+NS_ASSUME_NONNULL_END

@@ -15,6 +15,8 @@
 #import "ABI26_0_0RCTEventDispatcher.h"
 #import "ABI26_0_0RCTLog.h"
 #import "ABI26_0_0RCTUIManager.h"
+#import "ABI26_0_0RCTUIManagerObserverCoordinator.h"
+#import "ABI26_0_0RCTUIManagerUtils.h"
 #import "ABI26_0_0RCTUtils.h"
 #import "ABI26_0_0UIView+Private.h"
 #import "UIView+ReactABI26_0_0.h"
@@ -273,7 +275,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init)
  * Note: Explicitly returning `YES`, instead of relying on the default fixes
  * (at least) one bug where if you have a UIControl inside a UIScrollView and
  * tap on the UIControl and then start dragging (to scroll), it won't scroll.
- * Chat with andras for more details.
+ * Chat with @andras for more details.
  *
  * In order to have this called, you must have delaysContentTouches set to NO
  * (which is the not the `UIKit` default).
@@ -315,7 +317,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init)
 
   UIEdgeInsets contentInset = self.contentInset;
   CGSize contentSize = self.contentSize;
-  
+
   // If contentSize has not been measured yet we can't check bounds.
   if (CGSizeEqualToSize(contentSize, CGSizeZero)) {
     self.contentOffset = originalOffset;
@@ -355,9 +357,15 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init)
 
 @end
 
+@interface ABI26_0_0RCTScrollView () <ABI26_0_0RCTUIManagerObserver>
+
+@end
+
 @implementation ABI26_0_0RCTScrollView
 {
   ABI26_0_0RCTEventDispatcher *_eventDispatcher;
+  CGRect _prevFirstVisibleFrame;
+  __weak UIView *_firstVisibleView;
   ABI26_0_0RCTCustomScrollView *_scrollView;
   UIView *_contentView;
   NSTimeInterval _lastScrollDispatchTime;
@@ -411,7 +419,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init)
 ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithFrame:(CGRect)frame)
 ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:(NSCoder *)aDecoder)
 
-static inline void ABI26_0_0RCTApplyTranformationAccordingLayoutDirection(UIView *view, UIUserInterfaceLayoutDirection layoutDirection) {
+static inline void ABI26_0_0RCTApplyTransformationAccordingLayoutDirection(UIView *view, UIUserInterfaceLayoutDirection layoutDirection) {
   view.transform =
     layoutDirection == UIUserInterfaceLayoutDirectionLeftToRight ?
       CGAffineTransformIdentity :
@@ -422,8 +430,8 @@ static inline void ABI26_0_0RCTApplyTranformationAccordingLayoutDirection(UIView
 {
   [super setReactABI26_0_0LayoutDirection:layoutDirection];
 
-  ABI26_0_0RCTApplyTranformationAccordingLayoutDirection(_scrollView, layoutDirection);
-  ABI26_0_0RCTApplyTranformationAccordingLayoutDirection(_contentView, layoutDirection);
+  ABI26_0_0RCTApplyTransformationAccordingLayoutDirection(_scrollView, layoutDirection);
+  ABI26_0_0RCTApplyTransformationAccordingLayoutDirection(_contentView, layoutDirection);
 }
 
 - (void)setRemoveClippedSubviews:(__unused BOOL)removeClippedSubviews
@@ -442,7 +450,7 @@ static inline void ABI26_0_0RCTApplyTranformationAccordingLayoutDirection(UIView
   {
     ABI26_0_0RCTAssert(_contentView == nil, @"ABI26_0_0RCTScrollView may only contain a single subview");
     _contentView = view;
-    ABI26_0_0RCTApplyTranformationAccordingLayoutDirection(_contentView, self.ReactABI26_0_0LayoutDirection);
+    ABI26_0_0RCTApplyTransformationAccordingLayoutDirection(_contentView, self.ReactABI26_0_0LayoutDirection);
     [_scrollView addSubview:view];
   }
 }
@@ -492,6 +500,7 @@ static inline void ABI26_0_0RCTApplyTranformationAccordingLayoutDirection(UIView
 - (void)dealloc
 {
   _scrollView.delegate = nil;
+  [_eventDispatcher.bridge.uiManager.observerCoordinator removeObserver:self];
 }
 
 - (void)layoutSubviews
@@ -666,7 +675,6 @@ ABI26_0_0RCT_SCROLL_EVENT_HANDLER(scrollViewDidZoom, onScroll)
     _lastScrollDispatchTime = now;
     _allowNextScrollNoMatterWhat = NO;
   }
-
   ABI26_0_0RCT_FORWARD_SCROLL_EVENT(scrollViewDidScroll:scrollView);
 }
 
@@ -901,6 +909,79 @@ ABI26_0_0RCT_SCROLL_EVENT_HANDLER(scrollViewDidZoom, onScroll)
     _scrollView.contentSize = contentSize;
     _scrollView.contentOffset = newOffset;
   }
+}
+
+// maintainVisibleContentPosition is used to allow seamless loading of content from both ends of
+// the scrollview without the visible content jumping in position.
+- (void)setMaintainVisibleContentPosition:(NSDictionary *)maintainVisibleContentPosition
+{
+  if (maintainVisibleContentPosition != nil && _maintainVisibleContentPosition == nil) {
+    [_eventDispatcher.bridge.uiManager.observerCoordinator addObserver:self];
+  } else if (maintainVisibleContentPosition == nil && _maintainVisibleContentPosition != nil) {
+    [_eventDispatcher.bridge.uiManager.observerCoordinator removeObserver:self];
+  }
+  _maintainVisibleContentPosition = maintainVisibleContentPosition;
+}
+
+#pragma mark - ABI26_0_0RCTUIManagerObserver
+
+- (void)uiManagerWillPerformMounting:(ABI26_0_0RCTUIManager *)manager
+{
+  ABI26_0_0RCTAssertUIManagerQueue();
+  [manager prependUIBlock:^(ABI26_0_0RCTUIManager *uiManager, NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+    BOOL horz = [self isHorizontal:self->_scrollView];
+    NSUInteger minIdx = [self->_maintainVisibleContentPosition[@"minIndexForVisible"] integerValue];
+    for (NSUInteger ii = minIdx; ii < self->_contentView.subviews.count; ++ii) {
+      // Find the first entirely visible view. This must be done after we update the content offset
+      // or it will tend to grab rows that were made visible by the shift in position
+      UIView *subview = self->_contentView.subviews[ii];
+      if ((horz
+           ? subview.frame.origin.x >= self->_scrollView.contentOffset.x
+           : subview.frame.origin.y >= self->_scrollView.contentOffset.y) ||
+          ii == self->_contentView.subviews.count - 1) {
+        self->_prevFirstVisibleFrame = subview.frame;
+        self->_firstVisibleView = subview;
+        break;
+      }
+    }
+  }];
+  [manager addUIBlock:^(ABI26_0_0RCTUIManager *uiManager, NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+    if (self->_maintainVisibleContentPosition == nil) {
+      return; // The prop might have changed in the previous UIBlocks, so need to abort here.
+    }
+    NSNumber *autoscrollThreshold = self->_maintainVisibleContentPosition[@"autoscrollToTopThreshold"];
+    // TODO: detect and handle/ignore re-ordering
+    if ([self isHorizontal:self->_scrollView]) {
+      CGFloat deltaX = self->_firstVisibleView.frame.origin.x - self->_prevFirstVisibleFrame.origin.x;
+      if (ABS(deltaX) > 0.1) {
+        self->_scrollView.contentOffset = CGPointMake(
+          self->_scrollView.contentOffset.x + deltaX,
+          self->_scrollView.contentOffset.y
+        );
+        if (autoscrollThreshold != nil) {
+          // If the offset WAS within the threshold of the start, animate to the start.
+          if (self->_scrollView.contentOffset.x - deltaX <= [autoscrollThreshold integerValue]) {
+            [self scrollToOffset:CGPointMake(0, self->_scrollView.contentOffset.y) animated:YES];
+          }
+        }
+      }
+    } else {
+      CGRect newFrame = self->_firstVisibleView.frame;
+      CGFloat deltaY = newFrame.origin.y - self->_prevFirstVisibleFrame.origin.y;
+      if (ABS(deltaY) > 0.1) {
+        self->_scrollView.contentOffset = CGPointMake(
+          self->_scrollView.contentOffset.x,
+          self->_scrollView.contentOffset.y + deltaY
+        );
+        if (autoscrollThreshold != nil) {
+          // If the offset WAS within the threshold of the start, animate to the start.
+          if (self->_scrollView.contentOffset.y - deltaY <= [autoscrollThreshold integerValue]) {
+            [self scrollToOffset:CGPointMake(self->_scrollView.contentOffset.x, 0) animated:YES];
+          }
+        }
+      }
+    }
+  }];
 }
 
 // Note: setting several properties of UIScrollView has the effect of

@@ -3,7 +3,7 @@
 
 Pod::Spec.new do |s|
   s.name = "ExpoKit"
-  s.version = "2.4.0"
+  s.version = "2.4.7"
   s.summary = 'ExpoKit'
   s.description = 'ExpoKit allows native projects to integrate with the Expo SDK.'
   s.homepage = 'http://docs.expo.io'
@@ -17,7 +17,7 @@ Pod::Spec.new do |s|
   s.subspec "Core" do |ss|
     ss.source_files = "ios/Exponent/**/*.{h,m}", "template-files/keys.json"
     ss.preserve_paths = "ios/Exponent/**/*.{h,m}"
-    ss.exclude_files = "ios/Exponent/EXAppDelegate.*", "ios/Exponent/EXRootViewController.*", "ios/Exponent/Supporting/**", "ios/Exponent/Versioned/Optional/**/*.{h,m}"
+    ss.exclude_files = "ios/Exponent/Supporting/**", "ios/Exponent/Versioned/Optional/**/*.{h,m}"
 
     ss.dependency 'Amplitude-iOS', '~> 3.8'
     ss.dependency 'Analytics', '~> 3.5'

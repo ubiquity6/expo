@@ -207,7 +207,7 @@ ABI26_0_0RCT_EXPORT_MODULE()
   return ABI26_0_0RCTJSThread;
 }
 
-// js thread only (which suprisingly can be the main thread, depends on used JS executor)
+// js thread only (which surprisingly can be the main thread, depends on used JS executor)
 - (void)flushEventsQueue
 {
   [_eventQueueLock lock];

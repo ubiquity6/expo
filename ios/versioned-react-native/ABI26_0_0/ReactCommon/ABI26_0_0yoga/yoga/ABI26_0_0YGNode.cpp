@@ -9,6 +9,7 @@
 
 #include "ABI26_0_0YGNode.h"
 #include <iostream>
+#include "ABI26_0_0Utils.h"
 
 void* ABI26_0_0YGNode::getContext() const {
   return context_;
@@ -34,6 +35,10 @@ ABI26_0_0YGBaselineFunc ABI26_0_0YGNode::getBaseline() const {
   return baseline_;
 }
 
+ABI26_0_0YGDirtiedFunc ABI26_0_0YGNode::getDirtied() const {
+  return dirtied_;
+}
+
 ABI26_0_0YGStyle& ABI26_0_0YGNode::getStyle() {
   return style_;
 }
@@ -52,6 +57,10 @@ ABI26_0_0YGNodeRef ABI26_0_0YGNode::getParent() const {
 
 ABI26_0_0YGVector ABI26_0_0YGNode::getChildren() const {
   return children_;
+}
+
+uint32_t ABI26_0_0YGNode::getChildrenCount() const {
+  return static_cast<uint32_t>(children_.size());
 }
 
 ABI26_0_0YGNodeRef ABI26_0_0YGNode::getChild(uint32_t index) const {
@@ -77,6 +86,93 @@ ABI26_0_0YGValue ABI26_0_0YGNode::getResolvedDimension(int index) {
 std::array<ABI26_0_0YGValue, 2> ABI26_0_0YGNode::getResolvedDimensions() const {
   return resolvedDimensions_;
 }
+
+float ABI26_0_0YGNode::getLeadingPosition(
+    const ABI26_0_0YGFlexDirection axis,
+    const float axisSize) {
+  if (ABI26_0_0YGFlexDirectionIsRow(axis)) {
+    const ABI26_0_0YGValue* leadingPosition =
+        ABI26_0_0YGComputedEdgeValue(style_.position, ABI26_0_0YGEdgeStart, &ABI26_0_0YGValueUndefined);
+    if (leadingPosition->unit != ABI26_0_0YGUnitUndefined) {
+      return ABI26_0_0YGResolveValue(*leadingPosition, axisSize);
+    }
+  }
+
+  const ABI26_0_0YGValue* leadingPosition =
+      ABI26_0_0YGComputedEdgeValue(style_.position, leading[axis], &ABI26_0_0YGValueUndefined);
+
+  return leadingPosition->unit == ABI26_0_0YGUnitUndefined
+      ? 0.0f
+      : ABI26_0_0YGResolveValue(*leadingPosition, axisSize);
+}
+
+float ABI26_0_0YGNode::getTrailingPosition(
+    const ABI26_0_0YGFlexDirection axis,
+    const float axisSize) {
+  if (ABI26_0_0YGFlexDirectionIsRow(axis)) {
+    const ABI26_0_0YGValue* trailingPosition =
+        ABI26_0_0YGComputedEdgeValue(style_.position, ABI26_0_0YGEdgeEnd, &ABI26_0_0YGValueUndefined);
+    if (trailingPosition->unit != ABI26_0_0YGUnitUndefined) {
+      return ABI26_0_0YGResolveValue(*trailingPosition, axisSize);
+    }
+  }
+
+  const ABI26_0_0YGValue* trailingPosition =
+      ABI26_0_0YGComputedEdgeValue(style_.position, trailing[axis], &ABI26_0_0YGValueUndefined);
+
+  return trailingPosition->unit == ABI26_0_0YGUnitUndefined
+      ? 0.0f
+      : ABI26_0_0YGResolveValue(*trailingPosition, axisSize);
+}
+
+bool ABI26_0_0YGNode::isLeadingPositionDefined(const ABI26_0_0YGFlexDirection axis) {
+  return (ABI26_0_0YGFlexDirectionIsRow(axis) &&
+          ABI26_0_0YGComputedEdgeValue(style_.position, ABI26_0_0YGEdgeStart, &ABI26_0_0YGValueUndefined)
+                  ->unit != ABI26_0_0YGUnitUndefined) ||
+      ABI26_0_0YGComputedEdgeValue(style_.position, leading[axis], &ABI26_0_0YGValueUndefined)
+          ->unit != ABI26_0_0YGUnitUndefined;
+}
+
+bool ABI26_0_0YGNode::isTrailingPosDefined(const ABI26_0_0YGFlexDirection axis) {
+  return (ABI26_0_0YGFlexDirectionIsRow(axis) &&
+          ABI26_0_0YGComputedEdgeValue(style_.position, ABI26_0_0YGEdgeEnd, &ABI26_0_0YGValueUndefined)
+                  ->unit != ABI26_0_0YGUnitUndefined) ||
+      ABI26_0_0YGComputedEdgeValue(style_.position, trailing[axis], &ABI26_0_0YGValueUndefined)
+          ->unit != ABI26_0_0YGUnitUndefined;
+}
+
+float ABI26_0_0YGNode::getLeadingMargin(
+    const ABI26_0_0YGFlexDirection axis,
+    const float widthSize) {
+  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
+      style_.margin[ABI26_0_0YGEdgeStart].unit != ABI26_0_0YGUnitUndefined) {
+    return ABI26_0_0YGResolveValueMargin(style_.margin[ABI26_0_0YGEdgeStart], widthSize);
+  }
+
+  return ABI26_0_0YGResolveValueMargin(
+      *ABI26_0_0YGComputedEdgeValue(style_.margin, leading[axis], &ABI26_0_0YGValueZero),
+      widthSize);
+}
+
+float ABI26_0_0YGNode::getTrailingMargin(
+    const ABI26_0_0YGFlexDirection axis,
+    const float widthSize) {
+  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
+      style_.margin[ABI26_0_0YGEdgeEnd].unit != ABI26_0_0YGUnitUndefined) {
+    return ABI26_0_0YGResolveValueMargin(style_.margin[ABI26_0_0YGEdgeEnd], widthSize);
+  }
+
+  return ABI26_0_0YGResolveValueMargin(
+      *ABI26_0_0YGComputedEdgeValue(style_.margin, trailing[axis], &ABI26_0_0YGValueZero),
+      widthSize);
+}
+
+float ABI26_0_0YGNode::getMarginForAxis(
+    const ABI26_0_0YGFlexDirection axis,
+    const float widthSize) {
+  return getLeadingMargin(axis, widthSize) + getTrailingMargin(axis, widthSize);
+}
+
 // Setters
 
 void ABI26_0_0YGNode::setContext(void* context) {
@@ -127,6 +223,10 @@ void ABI26_0_0YGNode::setBaseLineFunc(ABI26_0_0YGBaselineFunc baseLineFunc) {
   baseline_ = baseLineFunc;
 }
 
+void ABI26_0_0YGNode::setDirtiedFunc(ABI26_0_0YGDirtiedFunc dirtiedFunc) {
+  dirtied_ = dirtiedFunc;
+}
+
 void ABI26_0_0YGNode::setStyle(ABI26_0_0YGStyle style) {
   style_ = style;
 }
@@ -168,7 +268,13 @@ void ABI26_0_0YGNode::setConfig(ABI26_0_0YGConfigRef config) {
 }
 
 void ABI26_0_0YGNode::setDirty(bool isDirty) {
+  if (isDirty == isDirty_) {
+    return;
+  }
   isDirty_ = isDirty;
+  if (isDirty && dirtied_) {
+    dirtied_(this);
+  }
 }
 
 bool ABI26_0_0YGNode::removeChild(ABI26_0_0YGNodeRef child) {
@@ -230,6 +336,46 @@ void ABI26_0_0YGNode::setLayoutDimension(float dimension, int index) {
   layout_.dimensions[index] = dimension;
 }
 
+// If both left and right are defined, then use left. Otherwise return
+// +left or -right depending on which is defined.
+float ABI26_0_0YGNode::relativePosition(
+    const ABI26_0_0YGFlexDirection axis,
+    const float axisSize) {
+  return isLeadingPositionDefined(axis) ? getLeadingPosition(axis, axisSize)
+                                        : -getTrailingPosition(axis, axisSize);
+}
+
+void ABI26_0_0YGNode::setPosition(
+    const ABI26_0_0YGDirection direction,
+    const float mainSize,
+    const float crossSize,
+    const float parentWidth) {
+  /* Root nodes should be always layouted as LTR, so we don't return negative
+   * values. */
+  const ABI26_0_0YGDirection directionRespectingRoot =
+      parent_ != nullptr ? direction : ABI26_0_0YGDirectionLTR;
+  const ABI26_0_0YGFlexDirection mainAxis =
+      ABI26_0_0YGResolveFlexDirection(style_.flexDirection, directionRespectingRoot);
+  const ABI26_0_0YGFlexDirection crossAxis =
+      ABI26_0_0YGFlexDirectionCross(mainAxis, directionRespectingRoot);
+
+  const float relativePositionMain = relativePosition(mainAxis, mainSize);
+  const float relativePositionCross = relativePosition(crossAxis, crossSize);
+
+  setLayoutPosition(
+      getLeadingMargin(mainAxis, parentWidth) + relativePositionMain,
+      leading[mainAxis]);
+  setLayoutPosition(
+      getTrailingMargin(mainAxis, parentWidth) + relativePositionMain,
+      trailing[mainAxis]);
+  setLayoutPosition(
+      getLeadingMargin(crossAxis, parentWidth) + relativePositionCross,
+      leading[crossAxis]);
+  setLayoutPosition(
+      getTrailingMargin(crossAxis, parentWidth) + relativePositionCross,
+      trailing[crossAxis]);
+}
+
 ABI26_0_0YGNode::ABI26_0_0YGNode()
     : context_(nullptr),
       print_(nullptr),
@@ -237,6 +383,7 @@ ABI26_0_0YGNode::ABI26_0_0YGNode()
       nodeType_(ABI26_0_0YGNodeTypeDefault),
       measure_(nullptr),
       baseline_(nullptr),
+      dirtied_(nullptr),
       style_(gABI26_0_0YGNodeStyleDefaults),
       layout_(gABI26_0_0YGNodeLayoutDefaults),
       lineIndex_(0),
@@ -254,6 +401,7 @@ ABI26_0_0YGNode::ABI26_0_0YGNode(const ABI26_0_0YGNode& node)
       nodeType_(node.nodeType_),
       measure_(node.measure_),
       baseline_(node.baseline_),
+      dirtied_(node.dirtied_),
       style_(node.style_),
       layout_(node.layout_),
       lineIndex_(node.lineIndex_),
@@ -275,6 +423,7 @@ ABI26_0_0YGNode::ABI26_0_0YGNode(
     ABI26_0_0YGNodeType nodeType,
     ABI26_0_0YGMeasureFunc measure,
     ABI26_0_0YGBaselineFunc baseline,
+    ABI26_0_0YGDirtiedFunc dirtied,
     ABI26_0_0YGStyle style,
     ABI26_0_0YGLayout layout,
     uint32_t lineIndex,
@@ -290,6 +439,7 @@ ABI26_0_0YGNode::ABI26_0_0YGNode(
       nodeType_(nodeType),
       measure_(measure),
       baseline_(baseline),
+      dirtied_(dirtied),
       style_(style),
       layout_(layout),
       lineIndex_(lineIndex),
@@ -315,6 +465,7 @@ ABI26_0_0YGNode& ABI26_0_0YGNode::operator=(const ABI26_0_0YGNode& node) {
   nodeType_ = node.getNodeType();
   measure_ = node.getMeasure();
   baseline_ = node.getBaseline();
+  dirtied_ = node.getDirtied();
   style_ = node.style_;
   layout_ = node.layout_;
   lineIndex_ = node.getLineIndex();
@@ -369,6 +520,15 @@ void ABI26_0_0YGNode::resolveDimension() {
   }
 }
 
+ABI26_0_0YGDirection ABI26_0_0YGNode::resolveDirection(const ABI26_0_0YGDirection parentDirection) {
+  if (style_.direction == ABI26_0_0YGDirectionInherit) {
+    return parentDirection > ABI26_0_0YGDirectionInherit ? parentDirection
+                                                : ABI26_0_0YGDirectionLTR;
+  } else {
+    return style_.direction;
+  }
+}
+
 void ABI26_0_0YGNode::clearChildren() {
   children_.clear();
   children_.shrink_to_fit();
@@ -414,12 +574,19 @@ void ABI26_0_0YGNode::cloneChildrenIfNeeded() {
 
 void ABI26_0_0YGNode::markDirtyAndPropogate() {
   if (!isDirty_) {
-    isDirty_ = true;
+    setDirty(true);
     setLayoutComputedFlexBasis(ABI26_0_0YGUndefined);
     if (parent_) {
       parent_->markDirtyAndPropogate();
     }
   }
+}
+
+void ABI26_0_0YGNode::markDirtyAndPropogateDownwards() {
+  isDirty_ = true;
+  for_each(children_.begin(), children_.end(), [](ABI26_0_0YGNodeRef childNode) {
+    childNode->markDirtyAndPropogateDownwards();
+  });
 }
 
 float ABI26_0_0YGNode::resolveFlexGrow() {
@@ -448,4 +615,131 @@ float ABI26_0_0YGNode::resolveFlexShrink() {
     return -style_.flex;
   }
   return config_->useWebDefaults ? kWebDefaultFlexShrink : kDefaultFlexShrink;
+}
+
+bool ABI26_0_0YGNode::isNodeFlexible() {
+  return (
+      (style_.positionType == ABI26_0_0YGPositionTypeRelative) &&
+      (resolveFlexGrow() != 0 || resolveFlexShrink() != 0));
+}
+
+float ABI26_0_0YGNode::getLeadingBorder(const ABI26_0_0YGFlexDirection axis) {
+  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
+      style_.border[ABI26_0_0YGEdgeStart].unit != ABI26_0_0YGUnitUndefined &&
+      style_.border[ABI26_0_0YGEdgeStart].value >= 0.0f) {
+    return style_.border[ABI26_0_0YGEdgeStart].value;
+  }
+
+  return fmaxf(
+      ABI26_0_0YGComputedEdgeValue(style_.border, leading[axis], &ABI26_0_0YGValueZero)->value,
+      0.0f);
+}
+
+float ABI26_0_0YGNode::getTrailingBorder(const ABI26_0_0YGFlexDirection flexDirection) {
+  if (ABI26_0_0YGFlexDirectionIsRow(flexDirection) &&
+      style_.border[ABI26_0_0YGEdgeEnd].unit != ABI26_0_0YGUnitUndefined &&
+      style_.border[ABI26_0_0YGEdgeEnd].value >= 0.0f) {
+    return style_.border[ABI26_0_0YGEdgeEnd].value;
+  }
+
+  return fmaxf(
+      ABI26_0_0YGComputedEdgeValue(style_.border, trailing[flexDirection], &ABI26_0_0YGValueZero)
+          ->value,
+      0.0f);
+}
+
+float ABI26_0_0YGNode::getLeadingPadding(
+    const ABI26_0_0YGFlexDirection axis,
+    const float widthSize) {
+  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
+      style_.padding[ABI26_0_0YGEdgeStart].unit != ABI26_0_0YGUnitUndefined &&
+      ABI26_0_0YGResolveValue(style_.padding[ABI26_0_0YGEdgeStart], widthSize) >= 0.0f) {
+    return ABI26_0_0YGResolveValue(style_.padding[ABI26_0_0YGEdgeStart], widthSize);
+  }
+  return fmaxf(
+      ABI26_0_0YGResolveValue(
+          *ABI26_0_0YGComputedEdgeValue(style_.padding, leading[axis], &ABI26_0_0YGValueZero),
+          widthSize),
+      0.0f);
+}
+
+float ABI26_0_0YGNode::getTrailingPadding(
+    const ABI26_0_0YGFlexDirection axis,
+    const float widthSize) {
+  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
+      style_.padding[ABI26_0_0YGEdgeEnd].unit != ABI26_0_0YGUnitUndefined &&
+      ABI26_0_0YGResolveValue(style_.padding[ABI26_0_0YGEdgeEnd], widthSize) >= 0.0f) {
+    return ABI26_0_0YGResolveValue(style_.padding[ABI26_0_0YGEdgeEnd], widthSize);
+  }
+  return fmaxf(
+      ABI26_0_0YGResolveValue(
+          *ABI26_0_0YGComputedEdgeValue(style_.padding, trailing[axis], &ABI26_0_0YGValueZero),
+          widthSize),
+      0.0f);
+}
+
+float ABI26_0_0YGNode::getLeadingPaddingAndBorder(
+    const ABI26_0_0YGFlexDirection axis,
+    const float widthSize) {
+  return getLeadingPadding(axis, widthSize) + getLeadingBorder(axis);
+}
+
+float ABI26_0_0YGNode::getTrailingPaddingAndBorder(
+    const ABI26_0_0YGFlexDirection axis,
+    const float widthSize) {
+  return getTrailingPadding(axis, widthSize) + getTrailingBorder(axis);
+}
+
+bool ABI26_0_0YGNode::didUseLegacyFlag() {
+  bool didUseLegacyFlag = layout_.didUseLegacyFlag;
+  if (didUseLegacyFlag) {
+    return true;
+  }
+  for (const auto& child : children_) {
+    if (child->layout_.didUseLegacyFlag) {
+      didUseLegacyFlag = true;
+      break;
+    }
+  }
+  return didUseLegacyFlag;
+}
+
+void ABI26_0_0YGNode::setAndPropogateUseLegacyFlag(bool useLegacyFlag) {
+  config_->useLegacyStretchBehaviour = useLegacyFlag;
+  for_each(children_.begin(), children_.end(), [=](ABI26_0_0YGNodeRef childNode) {
+    childNode->getConfig()->useLegacyStretchBehaviour = useLegacyFlag;
+  });
+}
+
+void ABI26_0_0YGNode::setLayoutDoesLegacyFlagAffectsLayout(
+    bool doesLegacyFlagAffectsLayout) {
+  layout_.doesLegacyStretchFlagAffectsLayout = doesLegacyFlagAffectsLayout;
+}
+
+void ABI26_0_0YGNode::setLayoutDidUseLegacyFlag(bool didUseLegacyFlag) {
+  layout_.didUseLegacyFlag = didUseLegacyFlag;
+}
+
+bool ABI26_0_0YGNode::isLayoutTreeEqualToNode(const ABI26_0_0YGNode& node) const {
+  if (children_.size() != node.children_.size()) {
+    return false;
+  }
+  if (layout_ != node.layout_) {
+    return false;
+  }
+  if (children_.size() == 0) {
+    return true;
+  }
+
+  bool isLayoutTreeEqual = true;
+  ABI26_0_0YGNodeRef otherNodeChildren = nullptr;
+  for (std::vector<ABI26_0_0YGNodeRef>::size_type i = 0; i < children_.size(); ++i) {
+    otherNodeChildren = node.children_[i];
+    isLayoutTreeEqual =
+        children_[i]->isLayoutTreeEqualToNode(*otherNodeChildren);
+    if (!isLayoutTreeEqual) {
+      return false;
+    }
+  }
+  return isLayoutTreeEqual;
 }

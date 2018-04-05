@@ -9,15 +9,8 @@
 
 #import "ABI26_0_0RCTSinglelineTextInputViewManager.h"
 
-#import <ReactABI26_0_0/ABI26_0_0RCTBridge.h>
-#import <ReactABI26_0_0/ABI26_0_0RCTFont.h>
-#import <ReactABI26_0_0/ABI26_0_0RCTShadowView+Layout.h>
-#import <ReactABI26_0_0/ABI26_0_0RCTShadowView.h>
-
-#import "ABI26_0_0RCTConvert+Text.h"
-#import "ABI26_0_0RCTSinglelineTextInputShadowView.h"
+#import "ABI26_0_0RCTBaseTextInputShadowView.h"
 #import "ABI26_0_0RCTSinglelineTextInputView.h"
-#import "ABI26_0_0RCTUITextField.h"
 
 @implementation ABI26_0_0RCTSinglelineTextInputViewManager
 
@@ -25,18 +18,17 @@ ABI26_0_0RCT_EXPORT_MODULE()
 
 - (ABI26_0_0RCTShadowView *)shadowView
 {
-  return [ABI26_0_0RCTSinglelineTextInputShadowView new];
+  ABI26_0_0RCTBaseTextInputShadowView *shadowView =
+    (ABI26_0_0RCTBaseTextInputShadowView *)[super shadowView];
+
+  shadowView.maximumNumberOfLines = 1;
+
+  return shadowView;
 }
 
 - (UIView *)view
 {
   return [[ABI26_0_0RCTSinglelineTextInputView alloc] initWithBridge:self.bridge];
 }
-
-#pragma mark - Singleline <TextInput> (aka TextField) specific properties
-
-ABI26_0_0RCT_REMAP_VIEW_PROPERTY(caretHidden, backedTextInputView.caretHidden, BOOL)
-ABI26_0_0RCT_REMAP_VIEW_PROPERTY(clearButtonMode, backedTextInputView.clearButtonMode, UITextFieldViewMode)
-ABI26_0_0RCT_EXPORT_VIEW_PROPERTY(onSelectionChange, ABI26_0_0RCTDirectEventBlock)
 
 @end

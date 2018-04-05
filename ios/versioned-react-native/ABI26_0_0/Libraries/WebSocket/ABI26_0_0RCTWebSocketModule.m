@@ -37,7 +37,7 @@
 @implementation ABI26_0_0RCTWebSocketModule
 {
   NSMutableDictionary<NSNumber *, ABI26_0_0RCTSRWebSocket *> *_sockets;
-  NSMutableDictionary<NSNumber *, id> *_contentHandlers;
+  NSMutableDictionary<NSNumber *, id<ABI26_0_0RCTWebSocketContentHandler>> *_contentHandlers;
 }
 
 ABI26_0_0RCT_EXPORT_MODULE()
@@ -53,8 +53,9 @@ ABI26_0_0RCT_EXPORT_MODULE()
            @"websocketClosed"];
 }
 
-- (void)dealloc
+- (void)invalidate
 {
+  _contentHandlers = nil;
   for (ABI26_0_0RCTSRWebSocket *socket in _sockets.allValues) {
     socket.delegate = nil;
     [socket close];
@@ -135,7 +136,7 @@ ABI26_0_0RCT_EXPORT_METHOD(close:(nonnull NSNumber *)socketID)
   NSNumber *socketID = [webSocket ReactABI26_0_0Tag];
   id contentHandler = _contentHandlers[socketID];
   if (contentHandler) {
-    message = [contentHandler processMessage:message forSocketID:socketID withType:&type];
+    message = [contentHandler processWebsocketMessage:message forSocketID:socketID withType:&type];
   } else {
     if ([message isKindOfClass:[NSData class]]) {
       type = @"binary";

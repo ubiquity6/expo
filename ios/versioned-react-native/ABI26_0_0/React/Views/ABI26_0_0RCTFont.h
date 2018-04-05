@@ -11,6 +11,16 @@
 
 #import <ReactABI26_0_0/ABI26_0_0RCTConvert.h>
 
+typedef UIFont *(^ABI26_0_0RCTFontHandler)(CGFloat fontSize, NSString *fontWeightDescription);
+
+/**
+ * ReactABI26_0_0 Native will use the System font for rendering by default. If you want to
+ * provide a different base font, use this override. The font weight supplied to your
+ * handler will be one of "ultralight", "thin", "light", "regular", "medium",
+ * "semibold", "extrabold", "bold", "heavy", or "black".
+ */
+ABI26_0_0RCT_EXTERN void ABI26_0_0RCTSetDefaultFontHandler(ABI26_0_0RCTFontHandler handler);
+
 @interface ABI26_0_0RCTFont : NSObject
 
 /**

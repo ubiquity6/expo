@@ -61,6 +61,24 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (nullable instancetype)initWithCoder:(NSCoder *)c
   return self;
 }
 
+- (void)setFrame:(CGRect)frame
+{
+  [super setFrame:frame];
+
+  CGSize minimumSize;
+  CGSize maximumSize;
+
+  ABI26_0_0RCTSurfaceMinimumSizeAndMaximumSizeFromSizeAndSizeMeasureMode(
+    self.bounds.size,
+    _sizeMeasureMode,
+    minimumSize,
+    maximumSize
+  );
+
+  [_surface setMinimumSize:minimumSize
+               maximumSize:maximumSize];
+}
+
 - (CGSize)intrinsicContentSize
 {
   if (ABI26_0_0RCTSurfaceStageIsPreparing(_stage)) {
@@ -84,24 +102,15 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (nullable instancetype)initWithCoder:(NSCoder *)c
     return CGSizeZero;
   }
 
-  CGSize minimumSize = CGSizeZero;
-  CGSize maximumSize = CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX);
+  CGSize minimumSize;
+  CGSize maximumSize;
 
-  if (_sizeMeasureMode & ABI26_0_0RCTSurfaceSizeMeasureModeWidthExact) {
-    minimumSize.width = size.width;
-    maximumSize.width = size.width;
-  }
-  else if (_sizeMeasureMode & ABI26_0_0RCTSurfaceSizeMeasureModeWidthAtMost) {
-    maximumSize.width = size.width;
-  }
-
-  if (_sizeMeasureMode & ABI26_0_0RCTSurfaceSizeMeasureModeHeightExact) {
-    minimumSize.height = size.height;
-    maximumSize.height = size.height;
-  }
-  else if (_sizeMeasureMode & ABI26_0_0RCTSurfaceSizeMeasureModeHeightAtMost) {
-    maximumSize.height = size.height;
-  }
+  ABI26_0_0RCTSurfaceMinimumSizeAndMaximumSizeFromSizeAndSizeMeasureMode(
+    size,
+    _sizeMeasureMode,
+    minimumSize,
+    maximumSize
+  );
 
   return [_surface sizeThatFitsMinimumSize:minimumSize
                                maximumSize:maximumSize];
@@ -143,6 +152,8 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (nullable instancetype)initWithCoder:(NSCoder *)c
     return;
   }
 
+  _isActivityIndicatorViewVisible = visible;
+
   if (visible) {
     if (_activityIndicatorViewFactory) {
       _activityIndicatorView = _activityIndicatorViewFactory();
@@ -164,6 +175,8 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (nullable instancetype)initWithCoder:(NSCoder *)c
     return;
   }
 
+  _isSurfaceViewVisible = visible;
+
   if (visible) {
     _surfaceView = _surface.view;
     _surfaceView.frame = self.bounds;
@@ -181,7 +194,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (nullable instancetype)initWithCoder:(NSCoder *)c
 {
   _activityIndicatorViewFactory = activityIndicatorViewFactory;
   if (_isActivityIndicatorViewVisible) {
-    _isActivityIndicatorViewVisible = NO;
+    self.isActivityIndicatorViewVisible = NO;
     self.isActivityIndicatorViewVisible = YES;
   }
 }
@@ -190,6 +203,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (nullable instancetype)initWithCoder:(NSCoder *)c
 
 - (void)_invalidateLayout
 {
+  [self invalidateIntrinsicContentSize];
   [self.superview setNeedsLayout];
 }
 

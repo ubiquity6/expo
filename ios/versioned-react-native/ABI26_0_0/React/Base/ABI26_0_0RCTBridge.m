@@ -278,30 +278,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init)
 
 - (Class)bridgeClass
 {
-  // In order to facilitate switching between bridges with only build
-  // file changes, this uses reflection to check which bridges are
-  // available.  This is a short-term hack until ABI26_0_0RCTBatchedBridge is
-  // removed.
-
-  Class batchedBridgeClass = objc_lookUpClass("ABI26_0_0RCTBatchedBridge");
-  Class cxxBridgeClass = objc_lookUpClass("ABI26_0_0RCTCxxBridge");
-
-  Class implClass = nil;
-
-  if ([self.delegate respondsToSelector:@selector(shouldBridgeUseCxxBridge:)]) {
-    if ([self.delegate shouldBridgeUseCxxBridge:self]) {
-      implClass = cxxBridgeClass;
-    } else {
-      implClass = batchedBridgeClass;
-    }
-  } else if (cxxBridgeClass != nil) {
-    implClass = cxxBridgeClass;
-  } else if (batchedBridgeClass != nil) {
-    implClass = batchedBridgeClass;
-  }
-
-  ABI26_0_0RCTAssert(implClass != nil, @"No bridge implementation is available, giving up.");
-  return implClass;
+  return [ABI26_0_0RCTCxxBridge class];
 }
 
 - (void)setUp

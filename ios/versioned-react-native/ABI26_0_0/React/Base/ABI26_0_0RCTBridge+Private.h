@@ -63,7 +63,7 @@ ABI26_0_0RCT_EXTERN void ABI26_0_0RCTVerifyAllModulesExported(NSArray *extraModu
 
 /**
  * The block that creates the modules' instances to be added to the bridge.
- * Exposed for the ABI26_0_0RCTBatchedBridge
+ * Exposed for ABI26_0_0RCTCxxBridge
  */
 @property (nonatomic, copy, readonly) ABI26_0_0RCTBridgeModuleListProvider moduleProvider;
 
@@ -74,14 +74,7 @@ ABI26_0_0RCT_EXTERN void ABI26_0_0RCTVerifyAllModulesExported(NSArray *extraModu
 
 @end
 
-@interface ABI26_0_0RCTBridge (ABI26_0_0RCTBatchedBridge)
-
-/**
- * Access the underlying JavaScript executor. You can use this in unit tests to detect
- * when the executor has been invalidated, or when you want to schedule calls on the
- * JS VM outside of ReactABI26_0_0 Native. Use with care!
- */
-@property (nonatomic, weak, readonly) id<ABI26_0_0RCTJavaScriptExecutor> javaScriptExecutor;
+@interface ABI26_0_0RCTBridge (ABI26_0_0RCTCxxBridge)
 
 /**
  * Used by ABI26_0_0RCTModuleData
@@ -130,22 +123,11 @@ ABI26_0_0RCT_EXTERN void ABI26_0_0RCTVerifyAllModulesExported(NSArray *extraModu
 - (void)stopProfiling:(void (^)(NSData *))callback;
 
 /**
- * Exposed for the ABI26_0_0RCTJSCExecutor for sending native methods called from
- * JavaScript in the middle of a batch.
- */
-- (void)handleBuffer:(NSArray<NSArray *> *)buffer batchEnded:(BOOL)hasEnded;
-
-/**
  * Synchronously call a specific native module's method and return the result
  */
 - (id)callNativeModule:(NSUInteger)moduleID
                 method:(NSUInteger)methodID
                 params:(NSArray *)params;
-
-/**
- * Exposed for the ABI26_0_0RCTJSCExecutor for lazily loading native modules
- */
-- (NSArray *)configForModuleName:(NSString *)moduleName;
 
 /**
  * Hook exposed for ABI26_0_0RCTLog to send logs to JavaScript when not running in JSC
@@ -174,13 +156,8 @@ ABI26_0_0RCT_EXTERN void ABI26_0_0RCTVerifyAllModulesExported(NSArray *extraModu
 
 @end
 
-@interface ABI26_0_0RCTBatchedBridge : ABI26_0_0RCTBridge <ABI26_0_0RCTInvalidating>
-
-@property (nonatomic, weak, readonly) ABI26_0_0RCTBridge *parentBridge;
-@property (nonatomic, weak, readonly) id<ABI26_0_0RCTJavaScriptExecutor> javaScriptExecutor;
-@property (nonatomic, assign, readonly) BOOL moduleSetupComplete;
+@interface ABI26_0_0RCTCxxBridge : ABI26_0_0RCTBridge
 
 - (instancetype)initWithParentBridge:(ABI26_0_0RCTBridge *)bridge NS_DESIGNATED_INITIALIZER;
-- (void)start;
 
 @end

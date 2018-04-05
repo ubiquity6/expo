@@ -52,9 +52,6 @@
 #import "ABI26_0_0RCTDevLoadingView.h"
 #endif
 
-@interface ABI26_0_0RCTCxxBridge : ABI26_0_0RCTBridge
-@end
-
 #define ABI26_0_0RCTAssertJSThread() \
   ABI26_0_0RCTAssert(self.executorClass || self->_jsThread == [NSThread currentThread], \
             @"This method must be called on JS thread")
@@ -342,6 +339,7 @@ struct ABI26_0_0RCTInstanceCallback : public InstanceCallback {
   #if ABI26_0_0RCT_PROFILE
         ("StartSamplingProfilerOnInit", (bool)self.devSettings.startSamplingProfilerOnLaunch)
   #endif
+         , nullptr
       ));
     }
   } else {
@@ -522,11 +520,6 @@ struct ABI26_0_0RCTInstanceCallback : public InstanceCallback {
   ABI26_0_0RCT_PROFILE_END_EVENT(ABI26_0_0RCTProfileTagAlways, @"");
 }
 
-- (NSArray *)configForModuleName:(NSString *)moduleName
-{
-  return _moduleDataByName[moduleName].config;
-}
-
 - (NSArray<ABI26_0_0RCTModuleData *> *)registerModulesForClasses:(NSArray<Class> *)moduleClasses
 {
   ABI26_0_0RCT_PROFILE_BEGIN_EVENT(ABI26_0_0RCTProfileTagAlways,
@@ -535,13 +528,6 @@ struct ABI26_0_0RCTInstanceCallback : public InstanceCallback {
   NSMutableArray<ABI26_0_0RCTModuleData *> *moduleDataByID = [NSMutableArray arrayWithCapacity:moduleClasses.count];
   for (Class moduleClass in moduleClasses) {
     NSString *moduleName = ABI26_0_0RCTBridgeModuleNameForClass(moduleClass);
-
-    // Don't initialize the old executor in the new bridge.
-    // TODO mhorowitz #10487027: after D3175632 lands, we won't need
-    // this, because it won't be eagerly initialized.
-    if ([moduleName isEqualToString:@"ABI26_0_0RCTJSCExecutor"]) {
-      continue;
-    }
 
     // Check for module name collisions
     ABI26_0_0RCTModuleData *moduleData = _moduleDataByName[moduleName];
@@ -685,7 +671,7 @@ struct ABI26_0_0RCTInstanceCallback : public InstanceCallback {
 
 - (void)_prepareModulesWithDispatchGroup:(dispatch_group_t)dispatchGroup
 {
-  ABI26_0_0RCT_PROFILE_BEGIN_EVENT(0, @"-[ABI26_0_0RCTBatchedBridge prepareModulesWithDispatch]", nil);
+  ABI26_0_0RCT_PROFILE_BEGIN_EVENT(0, @"-[ABI26_0_0RCTCxxBridge _prepareModulesWithDispatchGroup]", nil);
 
   BOOL initializeImmediately = NO;
   if (dispatchGroup == NULL) {

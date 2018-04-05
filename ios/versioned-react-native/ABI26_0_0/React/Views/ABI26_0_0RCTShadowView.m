@@ -34,8 +34,6 @@ typedef NS_ENUM(unsigned int, meta_prop_t) {
 
 @implementation ABI26_0_0RCTShadowView
 {
-  ABI26_0_0RCTUpdateLifecycle _propagationLifecycle;
-  ABI26_0_0RCTUpdateLifecycle _textLifecycle;
   NSDictionary *_lastParentProperties;
   NSMutableArray<ABI26_0_0RCTShadowView *> *_ReactABI26_0_0Subviews;
   BOOL _recomputePadding;
@@ -52,8 +50,7 @@ typedef NS_ENUM(unsigned int, meta_prop_t) {
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
     yogaConfig = ABI26_0_0YGConfigNew();
-    // Turnig off pixel rounding.
-    ABI26_0_0YGConfigSetPointScaleFactor(yogaConfig, 0.0);
+    ABI26_0_0YGConfigSetPointScaleFactor(yogaConfig, ABI26_0_0RCTScreenScale());
     ABI26_0_0YGConfigSetUseLegacyStretchBehaviour(yogaConfig, true);
   });
   return yogaConfig;
@@ -156,35 +153,6 @@ static void ABI26_0_0RCTProcessMetaPropsBorder(const ABI26_0_0YGValue metaProps[
   ABI26_0_0YGNodeStyleSetBorder(node, ABI26_0_0YGEdgeAll, metaProps[META_PROP_ALL].value);
 }
 
-// The absolute stuff is so that we can take into account our absolute position when rounding in order to
-// snap to the pixel grid. For example, say you have the following structure:
-//
-// +--------+---------+--------+
-// |        |+-------+|        |
-// |        ||       ||        |
-// |        |+-------+|        |
-// +--------+---------+--------+
-//
-// Say the screen width is 320 pts so the three big views will get the following x bounds from our layout system:
-// {0, 106.667}, {106.667, 213.333}, {213.333, 320}
-//
-// Assuming screen scale is 2, these numbers must be rounded to the nearest 0.5 to fit the pixel grid:
-// {0, 106.5}, {106.5, 213.5}, {213.5, 320}
-// You'll notice that the three widths are 106.5, 107, 106.5.
-//
-// This is great for the parent views but it gets trickier when we consider rounding for the subview.
-//
-// When we go to round the bounds for the subview in the middle, it's relative bounds are {0, 106.667}
-// which gets rounded to {0, 106.5}. This will cause the subview to be one pixel smaller than it should be.
-// this is why we need to pass in the absolute position in order to do the rounding relative to the screen's
-// grid rather than the view's grid.
-//
-// After passing in the absolutePosition of {106.667, y}, we do the following calculations:
-// absoluteLeft = round(absolutePosition.x + viewPosition.left) = round(106.667 + 0) = 106.5
-// absoluteRight = round(absolutePosition.x + viewPosition.left + viewSize.left) + round(106.667 + 0 + 106.667) = 213.5
-// width = 213.5 - 106.5 = 107
-// You'll notice that this is the same width we calculated for the parent view because we've taken its position into account.
-
 - (void)applyLayoutNode:(ABI26_0_0YGNodeRef)node
       viewsWithNewFrame:(NSMutableSet<ABI26_0_0RCTShadowView *> *)viewsWithNewFrame
        absolutePosition:(CGPoint)absolutePosition
@@ -203,48 +171,35 @@ static void ABI26_0_0RCTProcessMetaPropsBorder(const ABI26_0_0YGValue metaProps[
     return;
   }
 
-#if ABI26_0_0RCT_DEBUG
-  // This works around a breaking change in Yoga layout where setting flexBasis needs to be set explicitly, instead of relying on flex to propagate.
-  // We check for it by seeing if a width/height is provided along with a flexBasis of 0 and the width/height is laid out as 0.
-  if (ABI26_0_0YGNodeStyleGetFlexBasis(node).unit == ABI26_0_0YGUnitPoint && ABI26_0_0YGNodeStyleGetFlexBasis(node).value == 0 &&
-      ((ABI26_0_0YGNodeStyleGetWidth(node).unit == ABI26_0_0YGUnitPoint && ABI26_0_0YGNodeStyleGetWidth(node).value > 0 && ABI26_0_0YGNodeLayoutGetWidth(node) == 0) ||
-      (ABI26_0_0YGNodeStyleGetHeight(node).unit == ABI26_0_0YGUnitPoint && ABI26_0_0YGNodeStyleGetHeight(node).value > 0 && ABI26_0_0YGNodeLayoutGetHeight(node) == 0))) {
-    ABI26_0_0RCTLogError(@"View was rendered with explicitly set width/height but with a 0 flexBasis. (This might be fixed by changing flex: to flexGrow:) View: %@", self);
-  }
-#endif
-
-  CGPoint absoluteTopLeft = {
-    absolutePosition.x + ABI26_0_0YGNodeLayoutGetLeft(node),
-    absolutePosition.y + ABI26_0_0YGNodeLayoutGetTop(node)
-  };
-
-  CGPoint absoluteBottomRight = {
-    absolutePosition.x + ABI26_0_0YGNodeLayoutGetLeft(node) + ABI26_0_0YGNodeLayoutGetWidth(node),
-    absolutePosition.y + ABI26_0_0YGNodeLayoutGetTop(node) + ABI26_0_0YGNodeLayoutGetHeight(node)
-  };
-
-  CGRect frame = {{
-    ABI26_0_0RCTRoundPixelValue(ABI26_0_0YGNodeLayoutGetLeft(node)),
-    ABI26_0_0RCTRoundPixelValue(ABI26_0_0YGNodeLayoutGetTop(node)),
-  }, {
-    ABI26_0_0RCTRoundPixelValue(absoluteBottomRight.x - absoluteTopLeft.x),
-    ABI26_0_0RCTRoundPixelValue(absoluteBottomRight.y - absoluteTopLeft.y)
-  }};
+  CGRect frame = CGRectMake(ABI26_0_0YGNodeLayoutGetLeft(node), ABI26_0_0YGNodeLayoutGetTop(node), ABI26_0_0YGNodeLayoutGetWidth(node), ABI26_0_0YGNodeLayoutGetHeight(node));
 
   // Even if `ABI26_0_0YGNodeLayoutGetDirection` can return `ABI26_0_0YGDirectionInherit` here, it actually means
   // that Yoga will use LTR layout for the view (even if layout process is not finished yet).
-  UIUserInterfaceLayoutDirection updatedLayoutDirection = ABI26_0_0YGNodeLayoutGetDirection(_yogaNode) == ABI26_0_0YGDirectionRTL ? UIUserInterfaceLayoutDirectionRightToLeft : UIUserInterfaceLayoutDirectionLeftToRight;
+  UIUserInterfaceLayoutDirection layoutDirection = ABI26_0_0YGNodeLayoutGetDirection(_yogaNode) == ABI26_0_0YGDirectionRTL ? UIUserInterfaceLayoutDirectionRightToLeft : UIUserInterfaceLayoutDirectionLeftToRight;
 
-  if (!CGRectEqualToRect(frame, _frame) || _layoutDirection != updatedLayoutDirection) {
+  [self applyLayoutWithFrame:frame
+             layoutDirection:layoutDirection
+      viewsWithUpdatedLayout:viewsWithNewFrame
+            absolutePosition:absolutePosition];
+}
+
+- (void)applyLayoutWithFrame:(CGRect)frame
+             layoutDirection:(UIUserInterfaceLayoutDirection)layoutDirection
+      viewsWithUpdatedLayout:(NSMutableSet<ABI26_0_0RCTShadowView *> *)viewsWithUpdatedLayout
+            absolutePosition:(CGPoint)absolutePosition
+{
+  if (!CGRectEqualToRect(_frame, frame) || _layoutDirection != layoutDirection) {
     _frame = frame;
-    _layoutDirection = updatedLayoutDirection;
-    [viewsWithNewFrame addObject:self];
+    _layoutDirection = layoutDirection;
+    [viewsWithUpdatedLayout addObject:self];
   }
 
-  absolutePosition.x += ABI26_0_0YGNodeLayoutGetLeft(node);
-  absolutePosition.y += ABI26_0_0YGNodeLayoutGetTop(node);
+  absolutePosition.x += frame.origin.x;
+  absolutePosition.y += frame.origin.y;
 
-  [self applyLayoutToChildren:node viewsWithNewFrame:viewsWithNewFrame absolutePosition:absolutePosition];
+  [self applyLayoutToChildren:_yogaNode
+            viewsWithNewFrame:viewsWithUpdatedLayout
+             absolutePosition:absolutePosition];
 }
 
 - (void)applyLayoutToChildren:(ABI26_0_0YGNodeRef)node
@@ -257,54 +212,6 @@ static void ABI26_0_0RCTProcessMetaPropsBorder(const ABI26_0_0YGValue metaProps[
          viewsWithNewFrame:viewsWithNewFrame
           absolutePosition:absolutePosition];
   }
-}
-
-- (NSDictionary<NSString *, id> *)processUpdatedProperties:(NSMutableSet<ABI26_0_0RCTApplierBlock> *)applierBlocks
-                                          parentProperties:(NSDictionary<NSString *, id> *)parentProperties
-{
-  return parentProperties;
-}
-
-- (void)collectUpdatedProperties:(NSMutableSet<ABI26_0_0RCTApplierBlock> *)applierBlocks
-                parentProperties:(NSDictionary<NSString *, id> *)parentProperties
-{
-  if (_propagationLifecycle == ABI26_0_0RCTUpdateLifecycleComputed && [parentProperties isEqualToDictionary:_lastParentProperties]) {
-    return;
-  }
-  _propagationLifecycle = ABI26_0_0RCTUpdateLifecycleComputed;
-  _lastParentProperties = parentProperties;
-  NSDictionary<NSString *, id> *nextProps = [self processUpdatedProperties:applierBlocks parentProperties:parentProperties];
-  for (ABI26_0_0RCTShadowView *child in _ReactABI26_0_0Subviews) {
-    [child collectUpdatedProperties:applierBlocks parentProperties:nextProps];
-  }
-}
-
-- (void)collectUpdatedFrames:(NSMutableSet<ABI26_0_0RCTShadowView *> *)viewsWithNewFrame
-                   withFrame:(CGRect)frame
-                      hidden:(BOOL)hidden
-            absolutePosition:(CGPoint)absolutePosition
-{
-  // This is not the core layout method. It is only used by ABI26_0_0RCTTextShadowView to layout
-  // nested views.
-
-  if (_hidden != hidden) {
-    // The hidden state has changed. Even if the frame hasn't changed, add
-    // this ShadowView to viewsWithNewFrame so the UIManager will process
-    // this ShadowView's UIView and update its hidden state.
-    _hidden = hidden;
-    [viewsWithNewFrame addObject:self];
-  }
-
-  if (!CGRectEqualToRect(frame, _frame)) {
-    ABI26_0_0YGNodeStyleSetPositionType(_yogaNode, ABI26_0_0YGPositionTypeAbsolute);
-    ABI26_0_0YGNodeStyleSetWidth(_yogaNode, frame.size.width);
-    ABI26_0_0YGNodeStyleSetHeight(_yogaNode, frame.size.height);
-    ABI26_0_0YGNodeStyleSetPosition(_yogaNode, ABI26_0_0YGEdgeLeft, frame.origin.x);
-    ABI26_0_0YGNodeStyleSetPosition(_yogaNode, ABI26_0_0YGEdgeTop, frame.origin.y);
-  }
-
-  ABI26_0_0YGNodeCalculateLayout(_yogaNode, frame.size.width, frame.size.height, ABI26_0_0YGDirectionInherit);
-  [self applyLayoutNode:_yogaNode viewsWithNewFrame:viewsWithNewFrame absolutePosition:absolutePosition];
 }
 
 - (CGRect)measureLayoutRelativeToAncestor:(ABI26_0_0RCTShadowView *)ancestor
@@ -349,8 +256,6 @@ static void ABI26_0_0RCTProcessMetaPropsBorder(const ABI26_0_0YGValue metaProps[
     _intrinsicContentSize = CGSizeMake(UIViewNoIntrinsicMetric, UIViewNoIntrinsicMetric);
 
     _newView = YES;
-    _propagationLifecycle = ABI26_0_0RCTUpdateLifecycleUninitialized;
-    _textLifecycle = ABI26_0_0RCTUpdateLifecycleUninitialized;
 
     _ReactABI26_0_0Subviews = [NSMutableArray array];
 
@@ -381,37 +286,6 @@ static void ABI26_0_0RCTProcessMetaPropsBorder(const ABI26_0_0YGValue metaProps[
   return NO;
 }
 
-- (void)dirtyPropagation
-{
-  if (_propagationLifecycle != ABI26_0_0RCTUpdateLifecycleDirtied) {
-    _propagationLifecycle = ABI26_0_0RCTUpdateLifecycleDirtied;
-    [_superview dirtyPropagation];
-  }
-}
-
-- (BOOL)isPropagationDirty
-{
-  return _propagationLifecycle != ABI26_0_0RCTUpdateLifecycleComputed;
-}
-
-- (void)dirtyText
-{
-  if (_textLifecycle != ABI26_0_0RCTUpdateLifecycleDirtied) {
-    _textLifecycle = ABI26_0_0RCTUpdateLifecycleDirtied;
-    [_superview dirtyText];
-  }
-}
-
-- (BOOL)isTextDirty
-{
-  return _textLifecycle != ABI26_0_0RCTUpdateLifecycleComputed;
-}
-
-- (void)setTextComputed
-{
-  _textLifecycle = ABI26_0_0RCTUpdateLifecycleComputed;
-}
-
 - (void)insertReactABI26_0_0Subview:(ABI26_0_0RCTShadowView *)subview atIndex:(NSInteger)atIndex
 {
   ABI26_0_0RCTAssert(self.canHaveSubviews, @"Attempt to insert subview inside leaf view.");
@@ -421,14 +295,10 @@ static void ABI26_0_0RCTProcessMetaPropsBorder(const ABI26_0_0YGValue metaProps[
     ABI26_0_0YGNodeInsertChild(_yogaNode, subview.yogaNode, (uint32_t)atIndex);
   }
   subview->_superview = self;
-  [self dirtyText];
-  [self dirtyPropagation];
 }
 
 - (void)removeReactABI26_0_0Subview:(ABI26_0_0RCTShadowView *)subview
 {
-  [subview dirtyText];
-  [subview dirtyPropagation];
   subview->_superview = nil;
   [_ReactABI26_0_0Subviews removeObject:subview];
   if (![self isYogaLeafNode]) {
@@ -560,7 +430,6 @@ ABI26_0_0RCT_BORDER_PROPERTY(End, END)
 - (void)set##setProp:(ABI26_0_0YGValue)value                                 \
 {                                                                   \
   ABI26_0_0RCT_SET_ABI26_0_0YGVALUE_AUTO(value, ABI26_0_0YGNodeStyleSet##cssProp, _yogaNode);  \
-  [self dirtyText];                                                 \
 }                                                                   \
 - (ABI26_0_0YGValue)getProp                                                  \
 {                                                                   \
@@ -571,7 +440,6 @@ ABI26_0_0RCT_BORDER_PROPERTY(End, END)
 - (void)set##setProp:(ABI26_0_0YGValue)value                                 \
 {                                                                   \
   ABI26_0_0RCT_SET_ABI26_0_0YGVALUE(value, ABI26_0_0YGNodeStyleSet##cssProp, _yogaNode);       \
-  [self dirtyText];                                                 \
 }                                                                   \
 - (ABI26_0_0YGValue)getProp                                                  \
 {                                                                   \
@@ -591,7 +459,6 @@ ABI26_0_0RCT_MIN_MAX_DIMENSION_PROPERTY(MaxHeight, maxHeight, MaxHeight)
 - (void)set##setProp:(ABI26_0_0YGValue)value                                 \
 {                                                                   \
   ABI26_0_0RCT_SET_ABI26_0_0YGVALUE(value, ABI26_0_0YGNodeStyleSetPosition, _yogaNode, edge);  \
-  [self dirtyText];                                                 \
 }                                                                   \
 - (ABI26_0_0YGValue)getProp                                                  \
 {                                                                   \
@@ -608,7 +475,6 @@ ABI26_0_0RCT_POSITION_PROPERTY(End, end, ABI26_0_0YGEdgeEnd)
 {
   ABI26_0_0YGEdge edge = [[ABI26_0_0RCTI18nUtil sharedInstance] doLeftAndRightSwapInRTL] ? ABI26_0_0YGEdgeStart : ABI26_0_0YGEdgeLeft;
   ABI26_0_0RCT_SET_ABI26_0_0YGVALUE(value, ABI26_0_0YGNodeStyleSetPosition, _yogaNode, edge);
-  [self dirtyText];
 }
 - (ABI26_0_0YGValue)left
 {
@@ -620,7 +486,6 @@ ABI26_0_0RCT_POSITION_PROPERTY(End, end, ABI26_0_0YGEdgeEnd)
 {
   ABI26_0_0YGEdge edge = [[ABI26_0_0RCTI18nUtil sharedInstance] doLeftAndRightSwapInRTL] ? ABI26_0_0YGEdgeEnd : ABI26_0_0YGEdgeRight;
   ABI26_0_0RCT_SET_ABI26_0_0YGVALUE(value, ABI26_0_0YGNodeStyleSetPosition, _yogaNode, edge);
-  [self dirtyText];
 }
 - (ABI26_0_0YGValue)right
 {

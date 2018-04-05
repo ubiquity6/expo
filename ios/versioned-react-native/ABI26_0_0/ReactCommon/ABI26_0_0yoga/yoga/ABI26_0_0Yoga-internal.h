@@ -28,7 +28,6 @@ ABI26_0_0YG_EXTERN_C_END
 
 extern const std::array<ABI26_0_0YGEdge, 4> trailing;
 extern const std::array<ABI26_0_0YGEdge, 4> leading;
-extern bool ABI26_0_0YGFlexDirectionIsRow(const ABI26_0_0YGFlexDirection flexDirection);
 extern bool ABI26_0_0YGValueEqual(const ABI26_0_0YGValue a, const ABI26_0_0YGValue b);
 extern const ABI26_0_0YGValue ABI26_0_0YGValueUndefined;
 extern const ABI26_0_0YGValue ABI26_0_0YGValueAuto;
@@ -45,7 +44,7 @@ bool ABI26_0_0YGValueArrayEqual(
   return areEqual;
 }
 
-typedef struct ABI26_0_0YGCachedMeasurement {
+struct ABI26_0_0YGCachedMeasurement {
   float availableWidth;
   float availableHeight;
   ABI26_0_0YGMeasureMode widthMeasureMode;
@@ -53,7 +52,30 @@ typedef struct ABI26_0_0YGCachedMeasurement {
 
   float computedWidth;
   float computedHeight;
-} ABI26_0_0YGCachedMeasurement;
+
+  bool operator==(ABI26_0_0YGCachedMeasurement measurement) const {
+    bool isEqual = widthMeasureMode == measurement.widthMeasureMode &&
+        heightMeasureMode == measurement.heightMeasureMode;
+
+    if (!std::isnan(availableWidth) ||
+        !std::isnan(measurement.availableWidth)) {
+      isEqual = isEqual && availableWidth == measurement.availableWidth;
+    }
+    if (!std::isnan(availableHeight) ||
+        !std::isnan(measurement.availableHeight)) {
+      isEqual = isEqual && availableHeight == measurement.availableHeight;
+    }
+    if (!std::isnan(computedWidth) || !std::isnan(measurement.computedWidth)) {
+      isEqual = isEqual && computedWidth == measurement.computedWidth;
+    }
+    if (!std::isnan(computedHeight) ||
+        !std::isnan(measurement.computedHeight)) {
+      isEqual = isEqual && computedHeight == measurement.computedHeight;
+    }
+
+    return isEqual;
+  }
+};
 
 // This value was chosen based on empiracle data. Even the most complicated
 // layouts should not require more than 16 entries to fit within the cache.
@@ -81,6 +103,44 @@ struct ABI26_0_0YGLayout {
   std::array<float, 2> measuredDimensions;
 
   ABI26_0_0YGCachedMeasurement cachedLayout;
+  bool didUseLegacyFlag;
+  bool doesLegacyStretchFlagAffectsLayout;
+
+  bool operator==(ABI26_0_0YGLayout layout) const {
+    bool isEqual = position == layout.position &&
+        dimensions == layout.dimensions && margin == layout.margin &&
+        border == layout.border && padding == layout.padding &&
+        direction == layout.direction && hadOverflow == layout.hadOverflow &&
+        lastParentDirection == layout.lastParentDirection &&
+        nextCachedMeasurementsIndex == layout.nextCachedMeasurementsIndex &&
+        cachedLayout == layout.cachedLayout;
+
+    for (uint32_t i = 0; i < ABI26_0_0YG_MAX_CACHED_RESULT_COUNT && isEqual; ++i) {
+      isEqual =
+          isEqual && cachedMeasurements[i] == layout.cachedMeasurements[i];
+    }
+
+    if (!ABI26_0_0YGFloatIsUndefined(computedFlexBasis) ||
+        !ABI26_0_0YGFloatIsUndefined(layout.computedFlexBasis)) {
+      isEqual = isEqual && (computedFlexBasis == layout.computedFlexBasis);
+    }
+    if (!ABI26_0_0YGFloatIsUndefined(measuredDimensions[0]) ||
+        !ABI26_0_0YGFloatIsUndefined(layout.measuredDimensions[0])) {
+      isEqual =
+          isEqual && (measuredDimensions[0] == layout.measuredDimensions[0]);
+    }
+    if (!ABI26_0_0YGFloatIsUndefined(measuredDimensions[1]) ||
+        !ABI26_0_0YGFloatIsUndefined(layout.measuredDimensions[1])) {
+      isEqual =
+          isEqual && (measuredDimensions[1] == layout.measuredDimensions[1]);
+    }
+
+    return isEqual;
+  }
+
+  bool operator!=(ABI26_0_0YGLayout layout) const {
+    return !(*this == layout);
+  }
 };
 
 struct ABI26_0_0YGStyle {
@@ -151,15 +211,16 @@ struct ABI26_0_0YGStyle {
   }
 };
 
-typedef struct ABI26_0_0YGConfig {
+struct ABI26_0_0YGConfig {
   bool experimentalFeatures[ABI26_0_0YGExperimentalFeatureCount + 1];
   bool useWebDefaults;
   bool useLegacyStretchBehaviour;
+  bool shouldDiffLayoutWithoutLegacyStretchBehaviour;
   float pointScaleFactor;
   ABI26_0_0YGLogger logger;
   ABI26_0_0YGNodeClonedFunc cloneNodeCallback;
   void* context;
-} ABI26_0_0YGConfig;
+};
 
 #define ABI26_0_0YG_UNDEFINED_VALUES \
   { .value = ABI26_0_0YGUndefined, .unit = ABI26_0_0YGUnitUndefined }
@@ -273,6 +334,8 @@ static const ABI26_0_0YGLayout gABI26_0_0YGNodeLayoutDefaults = {
             .computedWidth = -1,
             .computedHeight = -1,
         },
+    .didUseLegacyFlag = false,
+    .doesLegacyStretchFlagAffectsLayout = false,
 };
 
 extern bool ABI26_0_0YGFloatsEqual(const float a, const float b);

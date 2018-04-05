@@ -211,7 +211,7 @@ void ABI26_0_0pushIndices(ABI26_0_0RNSVGGlyphContext *self) {
     return topFont_;
 }
 
-ABI26_0_0RNSVGFontData *ABI26_0_0getTopOrParentFont(ABI26_0_0RNSVGGlyphContext *self, ABI26_0_0RNSVGGroup* child) {
+ABI26_0_0RNSVGFontData *ReactABI26_0_0getTopOrParentFont(ABI26_0_0RNSVGGlyphContext *self, ABI26_0_0RNSVGGroup* child) {
     if (self->mTop_ > 0) {
         return self->topFont_;
     } else {
@@ -228,8 +228,8 @@ ABI26_0_0RNSVGFontData *ABI26_0_0getTopOrParentFont(ABI26_0_0RNSVGGlyphContext *
     }
 }
 
-void ABI26_0_0pushNodeAndFont(ABI26_0_0RNSVGGlyphContext *self, ABI26_0_0RNSVGGroup* node, NSDictionary* font) {
-    ABI26_0_0RNSVGFontData *parent = ABI26_0_0getTopOrParentFont(self, node);
+void ReactABI26_0_0pushNodeAndFont(ABI26_0_0RNSVGGlyphContext *self, ABI26_0_0RNSVGGroup* node, NSDictionary* font) {
+    ABI26_0_0RNSVGFontData *parent = ReactABI26_0_0getTopOrParentFont(self, node);
     self->mTop_++;
     if (font == nil) {
         [self->mFontContext_ addObject:parent];
@@ -245,7 +245,7 @@ void ABI26_0_0pushNodeAndFont(ABI26_0_0RNSVGGlyphContext *self, ABI26_0_0RNSVGGr
 
 - (void)pushContext:(ABI26_0_0RNSVGGroup*)node
                font:(NSDictionary*)font {
-    ABI26_0_0pushNodeAndFont(self, node, font);
+    ReactABI26_0_0pushNodeAndFont(self, node, font);
     ABI26_0_0pushIndices(self);
 }
 
@@ -256,7 +256,7 @@ void ABI26_0_0pushNodeAndFont(ABI26_0_0RNSVGGlyphContext *self, ABI26_0_0RNSVGGr
              deltaX:(NSArray*)deltaX
              deltaY:(NSArray*)deltaY
              rotate:(NSArray*)rotate {
-    ABI26_0_0pushNodeAndFont(self, (ABI26_0_0RNSVGGroup*)node, font);
+    ReactABI26_0_0pushNodeAndFont(self, (ABI26_0_0RNSVGGroup*)node, font);
     if (x != nil && [x count] != 0) {
         mXsIndex_++;
         mXIndex_ = -1;
@@ -346,7 +346,7 @@ void ABI26_0_0pushNodeAndFont(ABI26_0_0RNSVGGlyphContext *self, ABI26_0_0RNSVGGr
     }
 }
 
-void ABI26_0_0incrementIndices(NSMutableArray *indices, long topIndex) {
+void ReactABI26_0_0incrementIndices(NSMutableArray *indices, long topIndex) {
     for (long index = topIndex; index >= 0; index--) {
         long xIndex = [[indices  objectAtIndex:index] longValue];
         [indices setObject:[NSNumber numberWithLong:xIndex + 1] atIndexedSubscript:index];
@@ -389,7 +389,7 @@ void ABI26_0_0incrementIndices(NSMutableArray *indices, long topIndex) {
 }
 
 - (double)nextXWithDouble:(double)advance {
-    ABI26_0_0incrementIndices(mXIndices_, mXsIndex_);
+    ReactABI26_0_0incrementIndices(mXIndices_, mXsIndex_);
     long nextIndex = mXIndex_ + 1;
     if (nextIndex < [mXs_ count]) {
         mDX_ = 0;
@@ -406,7 +406,7 @@ void ABI26_0_0incrementIndices(NSMutableArray *indices, long topIndex) {
 }
 
 - (double)nextY {
-    ABI26_0_0incrementIndices(mYIndices_, mYsIndex_);
+    ReactABI26_0_0incrementIndices(mYIndices_, mYsIndex_);
     long nextIndex = mYIndex_ + 1;
     if (nextIndex < [mYs_ count]) {
         mDY_ = 0;
@@ -422,7 +422,7 @@ void ABI26_0_0incrementIndices(NSMutableArray *indices, long topIndex) {
 }
 
 - (double)nextDeltaX {
-    ABI26_0_0incrementIndices(mDXIndices_, mDXsIndex_);
+    ReactABI26_0_0incrementIndices(mDXIndices_, mDXsIndex_);
     long nextIndex = mDXIndex_ + 1;
     if (nextIndex < [mDXs_ count]) {
         mDXIndex_ = nextIndex;
@@ -438,7 +438,7 @@ void ABI26_0_0incrementIndices(NSMutableArray *indices, long topIndex) {
 }
 
 - (double)nextDeltaY {
-    ABI26_0_0incrementIndices(mDYIndices_, mDYsIndex_);
+    ReactABI26_0_0incrementIndices(mDYIndices_, mDYsIndex_);
     long nextIndex = mDYIndex_ + 1;
     if (nextIndex < [mDYs_ count]) {
         mDYIndex_ = nextIndex;
@@ -454,7 +454,7 @@ void ABI26_0_0incrementIndices(NSMutableArray *indices, long topIndex) {
 }
 
 - (NSNumber*)nextRotation {
-    ABI26_0_0incrementIndices(mRIndices_, mRsIndex_);
+    ReactABI26_0_0incrementIndices(mRIndices_, mRsIndex_);
     long nextIndex = mRIndex_ + 1;
     long count = [mRs_ count];
     if (nextIndex < count) {

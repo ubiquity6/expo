@@ -195,13 +195,11 @@ ABI26_0_0RCT_EXPORT_MODULE()
   // finished with its initialisation. But it does finish by the time it
   // relinquishes control of the main thread, so only queue on the JS thread
   // after the current main thread operation is done.
-  if (self.isNuclideDebuggingAvailable) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [bridge dispatchBlock:^{
-        [ABI26_0_0RCTInspectorDevServerHelper connectWithBundleURL:bridge.bundleURL];
-      } queue:ABI26_0_0RCTJSThread];
-    });
-  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [bridge dispatchBlock:^{
+      [ABI26_0_0RCTInspectorDevServerHelper connectWithBundleURL:bridge.bundleURL];
+    } queue:ABI26_0_0RCTJSThread];
+  });
 #endif
 }
 

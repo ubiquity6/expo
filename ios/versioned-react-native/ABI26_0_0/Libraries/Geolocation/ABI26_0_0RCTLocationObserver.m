@@ -158,6 +158,11 @@ ABI26_0_0RCT_EXPORT_MODULE()
   if (!_locationConfiguration.skipPermissionRequests) {
     [self requestAuthorization];
   }
+  
+  if (!_locationManager) {
+    _locationManager = [CLLocationManager new];
+    _locationManager.delegate = self;
+  }
 
   _locationManager.distanceFilter  = distanceFilter;
   _locationManager.desiredAccuracy = desiredAccuracy;

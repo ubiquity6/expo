@@ -16,6 +16,7 @@ import abi26_0_0.com.facebook.react.bridge.ReadableMap;
 import abi26_0_0.com.facebook.react.bridge.WritableMap;
 import com.nostra13.universalimageloader.core.DisplayImageOptions;
 import com.nostra13.universalimageloader.core.ImageLoader;
+import com.nostra13.universalimageloader.core.assist.ImageScaleType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -49,6 +50,7 @@ public class ImageManipulatorModule extends ReactContextBaseJavaModule {
       bmp = ImageLoader.getInstance().loadImageSync(decoded,
           new DisplayImageOptions.Builder()
               .cacheOnDisk(true)
+              .imageScaleType(ImageScaleType.NONE)
               .build());
     } catch (Throwable e) {}
     if (bmp == null) {
@@ -56,6 +58,7 @@ public class ImageManipulatorModule extends ReactContextBaseJavaModule {
         bmp = ImageLoader.getInstance().loadImageSync(uri,
             new DisplayImageOptions.Builder()
                 .cacheOnDisk(true)
+                .imageScaleType(ImageScaleType.NONE)
                 .build());
       } catch (Throwable e) {}
     }

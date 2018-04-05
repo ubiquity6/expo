@@ -16,12 +16,6 @@
 @class ABI26_0_0RCTRootShadowView;
 @class ABI26_0_0RCTSparseArray;
 
-typedef NS_ENUM(NSUInteger, ABI26_0_0RCTUpdateLifecycle) {
-  ABI26_0_0RCTUpdateLifecycleUninitialized = 0,
-  ABI26_0_0RCTUpdateLifecycleComputed,
-  ABI26_0_0RCTUpdateLifecycleDirtied,
-};
-
 typedef void (^ABI26_0_0RCTApplierBlock)(NSDictionary<NSNumber *, UIView *> *viewRegistry);
 
 /**
@@ -77,12 +71,6 @@ typedef void (^ABI26_0_0RCTApplierBlock)(NSDictionary<NSNumber *, UIView *> *vie
 @property (nonatomic, assign, getter=isNewView) BOOL newView;
 
 /**
- * isHidden - ABI26_0_0RCTUIManager uses this to determine whether or not the UIView should be hidden. Useful if the
- * ShadowView determines that its UIView will be clipped and wants to hide it.
- */
-@property (nonatomic, assign, getter=isHidden) BOOL hidden;
-
-/**
  * Computed layout direction of the view.
  */
 
@@ -109,7 +97,7 @@ typedef void (^ABI26_0_0RCTApplierBlock)(NSDictionary<NSNumber *, UIView *> *vie
 
 /**
  * Convenient alias to `width` and `height` in pixels.
- * Defaults to NAN in case of non-pixel dimention.
+ * Defaults to NAN in case of non-pixel dimension.
  */
 @property (nonatomic, assign) CGSize size;
 
@@ -191,32 +179,6 @@ typedef void (^ABI26_0_0RCTApplierBlock)(NSDictionary<NSNumber *, UIView *> *vie
 @property (nonatomic, assign) CGSize intrinsicContentSize;
 
 /**
- * Calculate property changes that need to be propagated to the view.
- * The applierBlocks set contains ABI26_0_0RCTApplierBlock functions that must be applied
- * on the main thread in order to update the view.
- */
-- (void)collectUpdatedProperties:(NSMutableSet<ABI26_0_0RCTApplierBlock> *)applierBlocks
-                parentProperties:(NSDictionary<NSString *, id> *)parentProperties;
-
-/**
- * Process the updated properties and apply them to view. Shadow view classes
- * that add additional propagating properties should override this method.
- */
-- (NSDictionary<NSString *, id> *)processUpdatedProperties:(NSMutableSet<ABI26_0_0RCTApplierBlock> *)applierBlocks
-                                          parentProperties:(NSDictionary<NSString *, id> *)parentProperties NS_REQUIRES_SUPER;
-
-/**
- * Can be called by a parent on a child in order to calculate all views whose frame needs
- * updating in that branch. Adds these frames to `viewsWithNewFrame`. Useful if layout
- * enters a view where flex doesn't apply (e.g. Text) and then you want to resume flex
- * layout on a subview.
- */
-- (void)collectUpdatedFrames:(NSMutableSet<ABI26_0_0RCTShadowView *> *)viewsWithNewFrame
-                   withFrame:(CGRect)frame
-                      hidden:(BOOL)hidden
-            absolutePosition:(CGPoint)absolutePosition;
-
-/**
  * Apply the CSS layout.
  * This method also calls `applyLayoutToChildren:` internally. The functionality
  * is split into two methods so subclasses can override `applyLayoutToChildren:`
@@ -225,6 +187,11 @@ typedef void (^ABI26_0_0RCTApplierBlock)(NSDictionary<NSNumber *, UIView *> *vie
 - (void)applyLayoutNode:(ABI26_0_0YGNodeRef)node
       viewsWithNewFrame:(NSMutableSet<ABI26_0_0RCTShadowView *> *)viewsWithNewFrame
        absolutePosition:(CGPoint)absolutePosition NS_REQUIRES_SUPER;
+
+- (void)applyLayoutWithFrame:(CGRect)frame
+             layoutDirection:(UIUserInterfaceLayoutDirection)layoutDirection
+      viewsWithUpdatedLayout:(NSMutableSet<ABI26_0_0RCTShadowView *> *)viewsWithUpdatedLayout
+            absolutePosition:(CGPoint)absolutePosition;
 
 /**
  * Enumerate the child nodes and tell them to apply layout.
@@ -252,13 +219,6 @@ typedef void (^ABI26_0_0RCTApplierBlock)(NSDictionary<NSNumber *, UIView *> *vie
  * Don't confuse this with `canHaveSubviews`.
  */
 - (BOOL)isYogaLeafNode;
-
-- (void)dirtyPropagation NS_REQUIRES_SUPER;
-- (BOOL)isPropagationDirty;
-
-- (void)dirtyText NS_REQUIRES_SUPER;
-- (void)setTextComputed NS_REQUIRES_SUPER;
-- (BOOL)isTextDirty;
 
 /**
  * As described in ABI26_0_0RCTComponent protocol.

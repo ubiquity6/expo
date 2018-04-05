@@ -171,6 +171,8 @@ polyfillGlobal('Request', () => require('../Network/fetch').Request);
 polyfillGlobal('Response', () => require('../Network/fetch').Response);
 polyfillGlobal('WebSocket', () => require('../WebSocket/WebSocket'));
 polyfillGlobal('Blob', () => require('../Blob/Blob'));
+polyfillGlobal('File', () => require('../Blob/File'));
+polyfillGlobal('FileReader', () => require('../Blob/FileReader'));
 polyfillGlobal('URL', () => require('../Blob/URL'));
 
 // Set up alert
@@ -203,6 +205,7 @@ BatchedBridge.registerLazyCallableModule('RCTLog', () => require('../Utilities/R
 BatchedBridge.registerLazyCallableModule('RCTDeviceEventEmitter', () => require('../EventEmitter/RCTDeviceEventEmitter'));
 BatchedBridge.registerLazyCallableModule('RCTNativeAppEventEmitter', () => require('../EventEmitter/RCTNativeAppEventEmitter'));
 BatchedBridge.registerLazyCallableModule('PerformanceLogger', () => require('../Utilities/PerformanceLogger'));
+BatchedBridge.registerLazyCallableModule('JSDevSupportModule', () => require('../Utilities/JSDevSupportModule'));
 
 global.fetchSegment = function(
   segmentId: number,

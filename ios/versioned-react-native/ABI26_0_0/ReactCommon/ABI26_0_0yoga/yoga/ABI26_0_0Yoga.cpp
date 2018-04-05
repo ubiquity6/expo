@@ -10,6 +10,7 @@
 #include "ABI26_0_0Yoga.h"
 #include <string.h>
 #include <algorithm>
+#include "ABI26_0_0Utils.h"
 #include "ABI26_0_0YGNode.h"
 #include "ABI26_0_0YGNodePrint.h"
 #include "ABI26_0_0Yoga-internal.h"
@@ -46,6 +47,7 @@ static ABI26_0_0YGConfig gABI26_0_0YGConfigDefaults = {
         },
     .useWebDefaults = false,
     .useLegacyStretchBehaviour = false,
+    .shouldDiffLayoutWithoutLegacyStretchBehaviour = false,
     .pointScaleFactor = 1.0f,
 #ifdef ANDROID
     .logger = &ABI26_0_0YGAndroidLog,
@@ -150,27 +152,6 @@ const ABI26_0_0YGValue* ABI26_0_0YGComputedEdgeValue(
   return defaultValue;
 }
 
-static inline float ABI26_0_0YGResolveValue(
-    const ABI26_0_0YGValue value,
-    const float parentSize) {
-  switch (value.unit) {
-    case ABI26_0_0YGUnitUndefined:
-    case ABI26_0_0YGUnitAuto:
-      return ABI26_0_0YGUndefined;
-    case ABI26_0_0YGUnitPoint:
-      return value.value;
-    case ABI26_0_0YGUnitPercent:
-      return value.value * parentSize / 100.0f;
-  }
-  return ABI26_0_0YGUndefined;
-}
-
-static inline float ABI26_0_0YGResolveValueMargin(
-    const ABI26_0_0YGValue value,
-    const float parentSize) {
-  return value.unit == ABI26_0_0YGUnitAuto ? 0 : ABI26_0_0YGResolveValue(value, parentSize);
-}
-
 void* ABI26_0_0YGNodeGetContext(ABI26_0_0YGNodeRef node) {
   return node->getContext();
 }
@@ -193,6 +174,14 @@ ABI26_0_0YGBaselineFunc ABI26_0_0YGNodeGetBaselineFunc(ABI26_0_0YGNodeRef node) 
 
 void ABI26_0_0YGNodeSetBaselineFunc(ABI26_0_0YGNodeRef node, ABI26_0_0YGBaselineFunc baselineFunc) {
   node->setBaseLineFunc(baselineFunc);
+}
+
+ABI26_0_0YGDirtiedFunc ABI26_0_0YGNodeGetDirtiedFunc(ABI26_0_0YGNodeRef node) {
+  return node->getDirtied();
+}
+
+void ABI26_0_0YGNodeSetDirtiedFunc(ABI26_0_0YGNodeRef node, ABI26_0_0YGDirtiedFunc dirtiedFunc) {
+  node->setDirtiedFunc(dirtiedFunc);
 }
 
 ABI26_0_0YGPrintFunc ABI26_0_0YGNodeGetPrintFunc(ABI26_0_0YGNodeRef node) {
@@ -221,6 +210,14 @@ void ABI26_0_0YGNodeSetNodeType(ABI26_0_0YGNodeRef node, ABI26_0_0YGNodeType nod
 
 bool ABI26_0_0YGNodeIsDirty(ABI26_0_0YGNodeRef node) {
   return node->isDirty();
+}
+
+bool ABI26_0_0YGNodeLayoutGetDidUseLegacyFlag(const ABI26_0_0YGNodeRef node) {
+  return node->didUseLegacyFlag();
+}
+
+void ABI26_0_0YGNodeMarkDirtyAndPropogateToDescendants(const ABI26_0_0YGNodeRef node) {
+  return node->markDirtyAndPropogateDownwards();
 }
 
 int32_t gNodeInstanceCount = 0;
@@ -255,6 +252,39 @@ ABI26_0_0YGNodeRef ABI26_0_0YGNodeClone(ABI26_0_0YGNodeRef oldNode) {
   return node;
 }
 
+static ABI26_0_0YGConfigRef ABI26_0_0YGConfigClone(const ABI26_0_0YGConfig& oldConfig) {
+  const ABI26_0_0YGConfigRef config = new ABI26_0_0YGConfig(oldConfig);
+  ABI26_0_0YGAssert(config != nullptr, "Could not allocate memory for config");
+  if (config == nullptr) {
+    abort();
+  }
+  gConfigInstanceCount++;
+  return config;
+}
+
+static ABI26_0_0YGNodeRef ABI26_0_0YGNodeDeepClone(ABI26_0_0YGNodeRef oldNode) {
+  ABI26_0_0YGNodeRef node = ABI26_0_0YGNodeClone(oldNode);
+  ABI26_0_0YGVector vec = ABI26_0_0YGVector();
+  vec.reserve(oldNode->getChildren().size());
+  ABI26_0_0YGNodeRef childNode = nullptr;
+  for (auto& item : oldNode->getChildren()) {
+    childNode = ABI26_0_0YGNodeDeepClone(item);
+    childNode->setParent(node);
+    vec.push_back(childNode);
+  }
+  node->setChildren(vec);
+
+  if (oldNode->getConfig() != nullptr) {
+    node->setConfig(ABI26_0_0YGConfigClone(*(oldNode->getConfig())));
+  }
+
+  if (oldNode->getNextChild() != nullptr) {
+    node->setNextChild(ABI26_0_0YGNodeDeepClone(oldNode->getNextChild()));
+  }
+
+  return node;
+}
+
 void ABI26_0_0YGNodeFree(const ABI26_0_0YGNodeRef node) {
   if (node->getParent()) {
     node->getParent()->removeChild(node);
@@ -268,8 +298,19 @@ void ABI26_0_0YGNodeFree(const ABI26_0_0YGNodeRef node) {
   }
 
   node->clearChildren();
-  free(node);
+  delete node;
   gNodeInstanceCount--;
+}
+
+static void ABI26_0_0YGConfigFreeRecursive(const ABI26_0_0YGNodeRef root) {
+  if (root->getConfig() != nullptr) {
+    gConfigInstanceCount--;
+    delete root->getConfig();
+  }
+  // Delete configs recursively for childrens
+  for (uint32_t i = 0; i < root->getChildrenCount(); ++i) {
+    ABI26_0_0YGConfigFreeRecursive(root->getChild(i));
+  }
 }
 
 void ABI26_0_0YGNodeFreeRecursive(const ABI26_0_0YGNodeRef root) {
@@ -749,19 +790,6 @@ bool ABI26_0_0YGLayoutNodeInternal(const ABI26_0_0YGNodeRef node,
                           const char *reason,
                           const ABI26_0_0YGConfigRef config);
 
-bool ABI26_0_0YGValueEqual(const ABI26_0_0YGValue a, const ABI26_0_0YGValue b) {
-  if (a.unit != b.unit) {
-    return false;
-  }
-
-  if (a.unit == ABI26_0_0YGUnitUndefined ||
-      (std::isnan(a.value) && std::isnan(b.value))) {
-    return true;
-  }
-
-  return fabs(a.value - b.value) < 0.0001f;
-}
-
 bool ABI26_0_0YGFloatsEqual(const float a, const float b) {
   if (ABI26_0_0YGFloatIsUndefined(a)) {
     return ABI26_0_0YGFloatIsUndefined(b);
@@ -791,136 +819,15 @@ static const std::array<ABI26_0_0YGEdge, 4> pos = {{
     ABI26_0_0YGEdgeLeft,
     ABI26_0_0YGEdgeRight,
 }};
+
 static const std::array<ABI26_0_0YGDimension, 4> dim = {
     {ABI26_0_0YGDimensionHeight, ABI26_0_0YGDimensionHeight, ABI26_0_0YGDimensionWidth, ABI26_0_0YGDimensionWidth}};
-
-bool ABI26_0_0YGFlexDirectionIsRow(const ABI26_0_0YGFlexDirection flexDirection) {
-  return flexDirection == ABI26_0_0YGFlexDirectionRow || flexDirection == ABI26_0_0YGFlexDirectionRowReverse;
-}
-
-static inline bool ABI26_0_0YGFlexDirectionIsColumn(const ABI26_0_0YGFlexDirection flexDirection) {
-  return flexDirection == ABI26_0_0YGFlexDirectionColumn || flexDirection == ABI26_0_0YGFlexDirectionColumnReverse;
-}
-
-static inline float ABI26_0_0YGNodeLeadingMargin(const ABI26_0_0YGNodeRef node,
-                                        const ABI26_0_0YGFlexDirection axis,
-                                        const float widthSize) {
-  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
-      node->getStyle().margin[ABI26_0_0YGEdgeStart].unit != ABI26_0_0YGUnitUndefined) {
-    return ABI26_0_0YGResolveValueMargin(
-        node->getStyle().margin[ABI26_0_0YGEdgeStart], widthSize);
-  }
-
-  return ABI26_0_0YGResolveValueMargin(
-      *ABI26_0_0YGComputedEdgeValue(
-          node->getStyle().margin, leading[axis], &ABI26_0_0YGValueZero),
-      widthSize);
-}
-
-static float ABI26_0_0YGNodeTrailingMargin(const ABI26_0_0YGNodeRef node,
-                                  const ABI26_0_0YGFlexDirection axis,
-                                  const float widthSize) {
-  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
-      node->getStyle().margin[ABI26_0_0YGEdgeEnd].unit != ABI26_0_0YGUnitUndefined) {
-    return ABI26_0_0YGResolveValueMargin(node->getStyle().margin[ABI26_0_0YGEdgeEnd], widthSize);
-  }
-
-  return ABI26_0_0YGResolveValueMargin(
-      *ABI26_0_0YGComputedEdgeValue(
-          node->getStyle().margin, trailing[axis], &ABI26_0_0YGValueZero),
-      widthSize);
-}
-
-static float ABI26_0_0YGNodeLeadingPadding(const ABI26_0_0YGNodeRef node,
-                                  const ABI26_0_0YGFlexDirection axis,
-                                  const float widthSize) {
-  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
-      node->getStyle().padding[ABI26_0_0YGEdgeStart].unit != ABI26_0_0YGUnitUndefined &&
-      ABI26_0_0YGResolveValue(node->getStyle().padding[ABI26_0_0YGEdgeStart], widthSize) >=
-          0.0f) {
-    return ABI26_0_0YGResolveValue(node->getStyle().padding[ABI26_0_0YGEdgeStart], widthSize);
-  }
-
-  return fmaxf(
-      ABI26_0_0YGResolveValue(
-          *ABI26_0_0YGComputedEdgeValue(
-              node->getStyle().padding, leading[axis], &ABI26_0_0YGValueZero),
-          widthSize),
-      0.0f);
-}
-
-static float ABI26_0_0YGNodeTrailingPadding(const ABI26_0_0YGNodeRef node,
-                                   const ABI26_0_0YGFlexDirection axis,
-                                   const float widthSize) {
-  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
-      node->getStyle().padding[ABI26_0_0YGEdgeEnd].unit != ABI26_0_0YGUnitUndefined &&
-      ABI26_0_0YGResolveValue(node->getStyle().padding[ABI26_0_0YGEdgeEnd], widthSize) >= 0.0f) {
-    return ABI26_0_0YGResolveValue(node->getStyle().padding[ABI26_0_0YGEdgeEnd], widthSize);
-  }
-
-  return fmaxf(
-      ABI26_0_0YGResolveValue(
-          *ABI26_0_0YGComputedEdgeValue(
-              node->getStyle().padding, trailing[axis], &ABI26_0_0YGValueZero),
-          widthSize),
-      0.0f);
-}
-
-static float ABI26_0_0YGNodeLeadingBorder(
-    const ABI26_0_0YGNodeRef node,
-    const ABI26_0_0YGFlexDirection axis) {
-  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
-      node->getStyle().border[ABI26_0_0YGEdgeStart].unit != ABI26_0_0YGUnitUndefined &&
-      node->getStyle().border[ABI26_0_0YGEdgeStart].value >= 0.0f) {
-    return node->getStyle().border[ABI26_0_0YGEdgeStart].value;
-  }
-
-  return fmaxf(
-      ABI26_0_0YGComputedEdgeValue(node->getStyle().border, leading[axis], &ABI26_0_0YGValueZero)
-          ->value,
-      0.0f);
-}
-
-static float ABI26_0_0YGNodeTrailingBorder(
-    const ABI26_0_0YGNodeRef node,
-    const ABI26_0_0YGFlexDirection axis) {
-  if (ABI26_0_0YGFlexDirectionIsRow(axis) &&
-      node->getStyle().border[ABI26_0_0YGEdgeEnd].unit != ABI26_0_0YGUnitUndefined &&
-      node->getStyle().border[ABI26_0_0YGEdgeEnd].value >= 0.0f) {
-    return node->getStyle().border[ABI26_0_0YGEdgeEnd].value;
-  }
-
-  return fmaxf(
-      ABI26_0_0YGComputedEdgeValue(node->getStyle().border, trailing[axis], &ABI26_0_0YGValueZero)
-          ->value,
-      0.0f);
-}
-
-static inline float ABI26_0_0YGNodeLeadingPaddingAndBorder(
-    const ABI26_0_0YGNodeRef node,
-    const ABI26_0_0YGFlexDirection axis,
-    const float widthSize) {
-  return ABI26_0_0YGNodeLeadingPadding(node, axis, widthSize) +
-      ABI26_0_0YGNodeLeadingBorder(node, axis);
-}
-
-static inline float ABI26_0_0YGNodeTrailingPaddingAndBorder(const ABI26_0_0YGNodeRef node,
-                                                   const ABI26_0_0YGFlexDirection axis,
-                                                   const float widthSize) {
-  return ABI26_0_0YGNodeTrailingPadding(node, axis, widthSize) + ABI26_0_0YGNodeTrailingBorder(node, axis);
-}
-
-static inline float ABI26_0_0YGNodeMarginForAxis(const ABI26_0_0YGNodeRef node,
-                                        const ABI26_0_0YGFlexDirection axis,
-                                        const float widthSize) {
-  return ABI26_0_0YGNodeLeadingMargin(node, axis, widthSize) + ABI26_0_0YGNodeTrailingMargin(node, axis, widthSize);
-}
 
 static inline float ABI26_0_0YGNodePaddingAndBorderForAxis(const ABI26_0_0YGNodeRef node,
                                                   const ABI26_0_0YGFlexDirection axis,
                                                   const float widthSize) {
-  return ABI26_0_0YGNodeLeadingPaddingAndBorder(node, axis, widthSize) +
-         ABI26_0_0YGNodeTrailingPaddingAndBorder(node, axis, widthSize);
+  return node->getLeadingPaddingAndBorder(axis, widthSize) +
+      node->getTrailingPaddingAndBorder(axis, widthSize);
 }
 
 static inline ABI26_0_0YGAlign ABI26_0_0YGNodeAlignItem(const ABI26_0_0YGNodeRef node, const ABI26_0_0YGNodeRef child) {
@@ -932,15 +839,6 @@ static inline ABI26_0_0YGAlign ABI26_0_0YGNodeAlignItem(const ABI26_0_0YGNodeRef
     return ABI26_0_0YGAlignFlexStart;
   }
   return align;
-}
-
-static inline ABI26_0_0YGDirection ABI26_0_0YGNodeResolveDirection(const ABI26_0_0YGNodeRef node,
-                                                 const ABI26_0_0YGDirection parentDirection) {
-  if (node->getStyle().direction == ABI26_0_0YGDirectionInherit) {
-    return parentDirection > ABI26_0_0YGDirectionInherit ? parentDirection : ABI26_0_0YGDirectionLTR;
-  } else {
-    return node->getStyle().direction;
-  }
 }
 
 static float ABI26_0_0YGBaseline(const ABI26_0_0YGNodeRef node) {
@@ -983,32 +881,6 @@ static float ABI26_0_0YGBaseline(const ABI26_0_0YGNodeRef node) {
   return baseline + baselineChild->getLayout().position[ABI26_0_0YGEdgeTop];
 }
 
-static inline ABI26_0_0YGFlexDirection ABI26_0_0YGResolveFlexDirection(const ABI26_0_0YGFlexDirection flexDirection,
-                                                     const ABI26_0_0YGDirection direction) {
-  if (direction == ABI26_0_0YGDirectionRTL) {
-    if (flexDirection == ABI26_0_0YGFlexDirectionRow) {
-      return ABI26_0_0YGFlexDirectionRowReverse;
-    } else if (flexDirection == ABI26_0_0YGFlexDirectionRowReverse) {
-      return ABI26_0_0YGFlexDirectionRow;
-    }
-  }
-
-  return flexDirection;
-}
-
-static ABI26_0_0YGFlexDirection ABI26_0_0YGFlexDirectionCross(const ABI26_0_0YGFlexDirection flexDirection,
-                                            const ABI26_0_0YGDirection direction) {
-  return ABI26_0_0YGFlexDirectionIsColumn(flexDirection)
-             ? ABI26_0_0YGResolveFlexDirection(ABI26_0_0YGFlexDirectionRow, direction)
-             : ABI26_0_0YGFlexDirectionColumn;
-}
-
-static inline bool ABI26_0_0YGNodeIsFlex(const ABI26_0_0YGNodeRef node) {
-  return (
-      node->getStyle().positionType == ABI26_0_0YGPositionTypeRelative &&
-      (node->resolveFlexGrow() != 0 || node->resolveFlexShrink() != 0));
-}
-
 static bool ABI26_0_0YGIsBaselineLayout(const ABI26_0_0YGNodeRef node) {
   if (ABI26_0_0YGFlexDirectionIsColumn(node->getStyle().flexDirection)) {
     return false;
@@ -1032,8 +904,8 @@ static inline float ABI26_0_0YGNodeDimWithMargin(const ABI26_0_0YGNodeRef node,
                                         const ABI26_0_0YGFlexDirection axis,
                                         const float widthSize) {
   return node->getLayout().measuredDimensions[dim[axis]] +
-      ABI26_0_0YGNodeLeadingMargin(node, axis, widthSize) +
-      ABI26_0_0YGNodeTrailingMargin(node, axis, widthSize);
+      node->getLeadingMargin(axis, widthSize) +
+      node->getTrailingMargin(axis, widthSize);
 }
 
 static inline bool ABI26_0_0YGNodeIsStyleDimDefined(const ABI26_0_0YGNodeRef node,
@@ -1052,66 +924,6 @@ static inline bool ABI26_0_0YGNodeIsStyleDimDefined(const ABI26_0_0YGNodeRef nod
 static inline bool ABI26_0_0YGNodeIsLayoutDimDefined(const ABI26_0_0YGNodeRef node, const ABI26_0_0YGFlexDirection axis) {
   const float value = node->getLayout().measuredDimensions[dim[axis]];
   return !ABI26_0_0YGFloatIsUndefined(value) && value >= 0.0f;
-}
-
-static inline bool ABI26_0_0YGNodeIsLeadingPosDefined(const ABI26_0_0YGNodeRef node, const ABI26_0_0YGFlexDirection axis) {
-  return (ABI26_0_0YGFlexDirectionIsRow(axis) &&
-          ABI26_0_0YGComputedEdgeValue(
-              node->getStyle().position, ABI26_0_0YGEdgeStart, &ABI26_0_0YGValueUndefined)
-                  ->unit != ABI26_0_0YGUnitUndefined) ||
-      ABI26_0_0YGComputedEdgeValue(
-          node->getStyle().position, leading[axis], &ABI26_0_0YGValueUndefined)
-          ->unit != ABI26_0_0YGUnitUndefined;
-}
-
-static inline bool ABI26_0_0YGNodeIsTrailingPosDefined(const ABI26_0_0YGNodeRef node, const ABI26_0_0YGFlexDirection axis) {
-  return (ABI26_0_0YGFlexDirectionIsRow(axis) &&
-          ABI26_0_0YGComputedEdgeValue(
-              node->getStyle().position, ABI26_0_0YGEdgeEnd, &ABI26_0_0YGValueUndefined)
-                  ->unit != ABI26_0_0YGUnitUndefined) ||
-      ABI26_0_0YGComputedEdgeValue(
-          node->getStyle().position, trailing[axis], &ABI26_0_0YGValueUndefined)
-          ->unit != ABI26_0_0YGUnitUndefined;
-}
-
-static float ABI26_0_0YGNodeLeadingPosition(const ABI26_0_0YGNodeRef node,
-                                   const ABI26_0_0YGFlexDirection axis,
-                                   const float axisSize) {
-  if (ABI26_0_0YGFlexDirectionIsRow(axis)) {
-    const ABI26_0_0YGValue* leadingPosition = ABI26_0_0YGComputedEdgeValue(
-        node->getStyle().position, ABI26_0_0YGEdgeStart, &ABI26_0_0YGValueUndefined);
-    if (leadingPosition->unit != ABI26_0_0YGUnitUndefined) {
-      return ABI26_0_0YGResolveValue(
-          *leadingPosition,
-          axisSize); // leadingPosition->resolveValue(axisSize);
-    }
-  }
-
-  const ABI26_0_0YGValue* leadingPosition = ABI26_0_0YGComputedEdgeValue(
-      node->getStyle().position, leading[axis], &ABI26_0_0YGValueUndefined);
-
-  return leadingPosition->unit == ABI26_0_0YGUnitUndefined
-      ? 0.0f
-      : ABI26_0_0YGResolveValue(*leadingPosition, axisSize);
-}
-
-static float ABI26_0_0YGNodeTrailingPosition(const ABI26_0_0YGNodeRef node,
-                                    const ABI26_0_0YGFlexDirection axis,
-                                    const float axisSize) {
-  if (ABI26_0_0YGFlexDirectionIsRow(axis)) {
-    const ABI26_0_0YGValue* trailingPosition = ABI26_0_0YGComputedEdgeValue(
-        node->getStyle().position, ABI26_0_0YGEdgeEnd, &ABI26_0_0YGValueUndefined);
-    if (trailingPosition->unit != ABI26_0_0YGUnitUndefined) {
-      return ABI26_0_0YGResolveValue(*trailingPosition, axisSize);
-    }
-  }
-
-  const ABI26_0_0YGValue* trailingPosition = ABI26_0_0YGComputedEdgeValue(
-      node->getStyle().position, trailing[axis], &ABI26_0_0YGValueUndefined);
-
-  return trailingPosition->unit == ABI26_0_0YGUnitUndefined
-      ? 0.0f
-      : ABI26_0_0YGResolveValue(*trailingPosition, axisSize);
 }
 
 static float ABI26_0_0YGNodeBoundAxisWithinMinAndMax(const ABI26_0_0YGNodeRef node,
@@ -1168,15 +980,6 @@ static void ABI26_0_0YGNodeSetChildTrailingPosition(const ABI26_0_0YGNodeRef nod
       trailing[axis]);
 }
 
-// If both left and right are defined, then use left. Otherwise return
-// +left or -right depending on which is defined.
-static float ABI26_0_0YGNodeRelativePosition(const ABI26_0_0YGNodeRef node,
-                                    const ABI26_0_0YGFlexDirection axis,
-                                    const float axisSize) {
-  return ABI26_0_0YGNodeIsLeadingPosDefined(node, axis) ? ABI26_0_0YGNodeLeadingPosition(node, axis, axisSize)
-                                               : -ABI26_0_0YGNodeTrailingPosition(node, axis, axisSize);
-}
-
 static void ABI26_0_0YGConstrainMaxSizeForMode(const ABI26_0_0YGNodeRef node,
                                       const enum ABI26_0_0YGFlexDirection axis,
                                       const float parentAxisSize,
@@ -1186,7 +989,7 @@ static void ABI26_0_0YGConstrainMaxSizeForMode(const ABI26_0_0YGNodeRef node,
   const float maxSize =
       ABI26_0_0YGResolveValue(
           node->getStyle().maxDimensions[dim[axis]], parentAxisSize) +
-      ABI26_0_0YGNodeMarginForAxis(node, axis, parentWidth);
+      node->getMarginForAxis(axis, parentWidth);
   switch (*mode) {
     case ABI26_0_0YGMeasureModeExactly:
     case ABI26_0_0YGMeasureModeAtMost:
@@ -1199,36 +1002,6 @@ static void ABI26_0_0YGConstrainMaxSizeForMode(const ABI26_0_0YGNodeRef node,
       }
       break;
   }
-}
-
-static void ABI26_0_0YGNodeSetPosition(const ABI26_0_0YGNodeRef node,
-                              const ABI26_0_0YGDirection direction,
-                              const float mainSize,
-                              const float crossSize,
-                              const float parentWidth) {
-  /* Root nodes should be always layouted as LTR, so we don't return negative values. */
-  const ABI26_0_0YGDirection directionRespectingRoot =
-      node->getParent() != nullptr ? direction : ABI26_0_0YGDirectionLTR;
-  const ABI26_0_0YGFlexDirection mainAxis = ABI26_0_0YGResolveFlexDirection(
-      node->getStyle().flexDirection, directionRespectingRoot);
-  const ABI26_0_0YGFlexDirection crossAxis = ABI26_0_0YGFlexDirectionCross(mainAxis, directionRespectingRoot);
-
-  const float relativePositionMain = ABI26_0_0YGNodeRelativePosition(node, mainAxis, mainSize);
-  const float relativePositionCross = ABI26_0_0YGNodeRelativePosition(node, crossAxis, crossSize);
-
-  node->setLayoutPosition(
-      ABI26_0_0YGNodeLeadingMargin(node, mainAxis, parentWidth) + relativePositionMain,
-      leading[mainAxis]);
-  node->setLayoutPosition(
-      ABI26_0_0YGNodeTrailingMargin(node, mainAxis, parentWidth) + relativePositionMain,
-      trailing[mainAxis]);
-  node->setLayoutPosition(
-      ABI26_0_0YGNodeLeadingMargin(node, crossAxis, parentWidth) + relativePositionCross,
-      leading[crossAxis]);
-  node->setLayoutPosition(
-      ABI26_0_0YGNodeTrailingMargin(node, crossAxis, parentWidth) +
-          relativePositionCross,
-      trailing[crossAxis]);
 }
 
 static void ABI26_0_0YGNodeComputeFlexBasisForChild(const ABI26_0_0YGNodeRef node,
@@ -1290,9 +1063,9 @@ static void ABI26_0_0YGNodeComputeFlexBasisForChild(const ABI26_0_0YGNodeRef nod
     childHeightMeasureMode = ABI26_0_0YGMeasureModeUndefined;
 
     const float marginRow =
-        ABI26_0_0YGNodeMarginForAxis(child, ABI26_0_0YGFlexDirectionRow, parentWidth);
+        child->getMarginForAxis(ABI26_0_0YGFlexDirectionRow, parentWidth);
     const float marginColumn =
-        ABI26_0_0YGNodeMarginForAxis(child, ABI26_0_0YGFlexDirectionColumn, parentWidth);
+        child->getMarginForAxis(ABI26_0_0YGFlexDirectionColumn, parentWidth);
 
     if (isRowStyleDimDefined) {
       childWidth =
@@ -1414,8 +1187,9 @@ static void ABI26_0_0YGNodeAbsoluteLayoutChild(const ABI26_0_0YGNodeRef node,
   ABI26_0_0YGMeasureMode childWidthMeasureMode = ABI26_0_0YGMeasureModeUndefined;
   ABI26_0_0YGMeasureMode childHeightMeasureMode = ABI26_0_0YGMeasureModeUndefined;
 
-  const float marginRow = ABI26_0_0YGNodeMarginForAxis(child, ABI26_0_0YGFlexDirectionRow, width);
-  const float marginColumn = ABI26_0_0YGNodeMarginForAxis(child, ABI26_0_0YGFlexDirectionColumn, width);
+  const float marginRow = child->getMarginForAxis(ABI26_0_0YGFlexDirectionRow, width);
+  const float marginColumn =
+      child->getMarginForAxis(ABI26_0_0YGFlexDirectionColumn, width);
 
   if (ABI26_0_0YGNodeIsStyleDimDefined(child, ABI26_0_0YGFlexDirectionRow, width)) {
     childWidth =
@@ -1425,13 +1199,13 @@ static void ABI26_0_0YGNodeAbsoluteLayoutChild(const ABI26_0_0YGNodeRef node,
     // If the child doesn't have a specified width, compute the width based
     // on the left/right
     // offsets if they're defined.
-    if (ABI26_0_0YGNodeIsLeadingPosDefined(child, ABI26_0_0YGFlexDirectionRow) &&
-        ABI26_0_0YGNodeIsTrailingPosDefined(child, ABI26_0_0YGFlexDirectionRow)) {
+    if (child->isLeadingPositionDefined(ABI26_0_0YGFlexDirectionRow) &&
+        child->isTrailingPosDefined(ABI26_0_0YGFlexDirectionRow)) {
       childWidth = node->getLayout().measuredDimensions[ABI26_0_0YGDimensionWidth] -
-          (ABI26_0_0YGNodeLeadingBorder(node, ABI26_0_0YGFlexDirectionRow) +
-           ABI26_0_0YGNodeTrailingBorder(node, ABI26_0_0YGFlexDirectionRow)) -
-          (ABI26_0_0YGNodeLeadingPosition(child, ABI26_0_0YGFlexDirectionRow, width) +
-           ABI26_0_0YGNodeTrailingPosition(child, ABI26_0_0YGFlexDirectionRow, width));
+          (node->getLeadingBorder(ABI26_0_0YGFlexDirectionRow) +
+           node->getTrailingBorder(ABI26_0_0YGFlexDirectionRow)) -
+          (child->getLeadingPosition(ABI26_0_0YGFlexDirectionRow, width) +
+           child->getTrailingPosition(ABI26_0_0YGFlexDirectionRow, width));
       childWidth = ABI26_0_0YGNodeBoundAxis(child, ABI26_0_0YGFlexDirectionRow, childWidth, width, width);
     }
   }
@@ -1444,13 +1218,13 @@ static void ABI26_0_0YGNodeAbsoluteLayoutChild(const ABI26_0_0YGNodeRef node,
     // If the child doesn't have a specified height, compute the height
     // based on the top/bottom
     // offsets if they're defined.
-    if (ABI26_0_0YGNodeIsLeadingPosDefined(child, ABI26_0_0YGFlexDirectionColumn) &&
-        ABI26_0_0YGNodeIsTrailingPosDefined(child, ABI26_0_0YGFlexDirectionColumn)) {
+    if (child->isLeadingPositionDefined(ABI26_0_0YGFlexDirectionColumn) &&
+        child->isTrailingPosDefined(ABI26_0_0YGFlexDirectionColumn)) {
       childHeight = node->getLayout().measuredDimensions[ABI26_0_0YGDimensionHeight] -
-          (ABI26_0_0YGNodeLeadingBorder(node, ABI26_0_0YGFlexDirectionColumn) +
-           ABI26_0_0YGNodeTrailingBorder(node, ABI26_0_0YGFlexDirectionColumn)) -
-          (ABI26_0_0YGNodeLeadingPosition(child, ABI26_0_0YGFlexDirectionColumn, height) +
-           ABI26_0_0YGNodeTrailingPosition(child, ABI26_0_0YGFlexDirectionColumn, height));
+          (node->getLeadingBorder(ABI26_0_0YGFlexDirectionColumn) +
+           node->getTrailingBorder(ABI26_0_0YGFlexDirectionColumn)) -
+          (child->getLeadingPosition(ABI26_0_0YGFlexDirectionColumn, height) +
+           child->getTrailingPosition(ABI26_0_0YGFlexDirectionColumn, height));
       childHeight = ABI26_0_0YGNodeBoundAxis(child, ABI26_0_0YGFlexDirectionColumn, childHeight, height, width);
     }
   }
@@ -1497,9 +1271,9 @@ static void ABI26_0_0YGNodeAbsoluteLayoutChild(const ABI26_0_0YGNodeRef node,
                          "abs-measure",
                          config);
     childWidth = child->getLayout().measuredDimensions[ABI26_0_0YGDimensionWidth] +
-        ABI26_0_0YGNodeMarginForAxis(child, ABI26_0_0YGFlexDirectionRow, width);
+        child->getMarginForAxis(ABI26_0_0YGFlexDirectionRow, width);
     childHeight = child->getLayout().measuredDimensions[ABI26_0_0YGDimensionHeight] +
-        ABI26_0_0YGNodeMarginForAxis(child, ABI26_0_0YGFlexDirectionColumn, width);
+        child->getMarginForAxis(ABI26_0_0YGFlexDirectionColumn, width);
   }
 
   ABI26_0_0YGLayoutNodeInternal(child,
@@ -1514,17 +1288,18 @@ static void ABI26_0_0YGNodeAbsoluteLayoutChild(const ABI26_0_0YGNodeRef node,
                        "abs-layout",
                        config);
 
-  if (ABI26_0_0YGNodeIsTrailingPosDefined(child, mainAxis) && !ABI26_0_0YGNodeIsLeadingPosDefined(child, mainAxis)) {
+  if (child->isTrailingPosDefined(mainAxis) &&
+      !child->isLeadingPositionDefined(mainAxis)) {
     child->setLayoutPosition(
         node->getLayout().measuredDimensions[dim[mainAxis]] -
             child->getLayout().measuredDimensions[dim[mainAxis]] -
-            ABI26_0_0YGNodeTrailingBorder(node, mainAxis) -
-            ABI26_0_0YGNodeTrailingMargin(child, mainAxis, width) -
-            ABI26_0_0YGNodeTrailingPosition(
-                child, mainAxis, isMainAxisRow ? width : height),
+            node->getTrailingBorder(mainAxis) -
+            child->getTrailingMargin(mainAxis, width) -
+            child->getTrailingPosition(
+                mainAxis, isMainAxisRow ? width : height),
         leading[mainAxis]);
   } else if (
-      !ABI26_0_0YGNodeIsLeadingPosDefined(child, mainAxis) &&
+      !child->isLeadingPositionDefined(mainAxis) &&
       node->getStyle().justifyContent == ABI26_0_0YGJustifyCenter) {
     child->setLayoutPosition(
         (node->getLayout().measuredDimensions[dim[mainAxis]] -
@@ -1532,7 +1307,7 @@ static void ABI26_0_0YGNodeAbsoluteLayoutChild(const ABI26_0_0YGNodeRef node,
             2.0f,
         leading[mainAxis]);
   } else if (
-      !ABI26_0_0YGNodeIsLeadingPosDefined(child, mainAxis) &&
+      !child->isLeadingPositionDefined(mainAxis) &&
       node->getStyle().justifyContent == ABI26_0_0YGJustifyFlexEnd) {
     child->setLayoutPosition(
         (node->getLayout().measuredDimensions[dim[mainAxis]] -
@@ -1540,26 +1315,27 @@ static void ABI26_0_0YGNodeAbsoluteLayoutChild(const ABI26_0_0YGNodeRef node,
         leading[mainAxis]);
   }
 
-  if (ABI26_0_0YGNodeIsTrailingPosDefined(child, crossAxis) &&
-      !ABI26_0_0YGNodeIsLeadingPosDefined(child, crossAxis)) {
+  if (child->isTrailingPosDefined(crossAxis) &&
+      !child->isLeadingPositionDefined(crossAxis)) {
     child->setLayoutPosition(
         node->getLayout().measuredDimensions[dim[crossAxis]] -
             child->getLayout().measuredDimensions[dim[crossAxis]] -
-            ABI26_0_0YGNodeTrailingBorder(node, crossAxis) -
-            ABI26_0_0YGNodeTrailingMargin(child, crossAxis, width) -
-            ABI26_0_0YGNodeTrailingPosition(
-                child, crossAxis, isMainAxisRow ? height : width),
+            node->getTrailingBorder(crossAxis) -
+            child->getTrailingMargin(crossAxis, width) -
+            child->getTrailingPosition(
+                crossAxis, isMainAxisRow ? height : width),
         leading[crossAxis]);
 
-  } else if (!ABI26_0_0YGNodeIsLeadingPosDefined(child, crossAxis) &&
-             ABI26_0_0YGNodeAlignItem(node, child) == ABI26_0_0YGAlignCenter) {
+  } else if (
+      !child->isLeadingPositionDefined(crossAxis) &&
+      ABI26_0_0YGNodeAlignItem(node, child) == ABI26_0_0YGAlignCenter) {
     child->setLayoutPosition(
         (node->getLayout().measuredDimensions[dim[crossAxis]] -
          child->getLayout().measuredDimensions[dim[crossAxis]]) /
             2.0f,
         leading[crossAxis]);
   } else if (
-      !ABI26_0_0YGNodeIsLeadingPosDefined(child, crossAxis) &&
+      !child->isLeadingPositionDefined(crossAxis) &&
       ((ABI26_0_0YGNodeAlignItem(node, child) == ABI26_0_0YGAlignFlexEnd) ^
        (node->getStyle().flexWrap == ABI26_0_0YGWrapWrapReverse))) {
     child->setLayoutPosition(
@@ -1585,19 +1361,22 @@ static void ABI26_0_0YGNodeWithMeasureFuncSetMeasuredDimensions(const ABI26_0_0Y
       ABI26_0_0YGNodePaddingAndBorderForAxis(node, ABI26_0_0YGFlexDirectionRow, availableWidth);
   const float paddingAndBorderAxisColumn =
       ABI26_0_0YGNodePaddingAndBorderForAxis(node, ABI26_0_0YGFlexDirectionColumn, availableWidth);
-  const float marginAxisRow = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionRow, availableWidth);
-  const float marginAxisColumn = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionColumn, availableWidth);
+  const float marginAxisRow =
+      node->getMarginForAxis(ABI26_0_0YGFlexDirectionRow, availableWidth);
+  const float marginAxisColumn =
+      node->getMarginForAxis(ABI26_0_0YGFlexDirectionColumn, availableWidth);
 
   // We want to make sure we don't call measure with negative size
   const float innerWidth = ABI26_0_0YGFloatIsUndefined(availableWidth)
-                               ? availableWidth
-                               : fmaxf(0, availableWidth - marginAxisRow - paddingAndBorderAxisRow);
-  const float innerHeight =
-      ABI26_0_0YGFloatIsUndefined(availableHeight)
-          ? availableHeight
-          : fmaxf(0, availableHeight - marginAxisColumn - paddingAndBorderAxisColumn);
+      ? availableWidth
+      : fmaxf(0, availableWidth - marginAxisRow - paddingAndBorderAxisRow);
+  const float innerHeight = ABI26_0_0YGFloatIsUndefined(availableHeight)
+      ? availableHeight
+      : fmaxf(
+            0, availableHeight - marginAxisColumn - paddingAndBorderAxisColumn);
 
-  if (widthMeasureMode == ABI26_0_0YGMeasureModeExactly && heightMeasureMode == ABI26_0_0YGMeasureModeExactly) {
+  if (widthMeasureMode == ABI26_0_0YGMeasureModeExactly &&
+      heightMeasureMode == ABI26_0_0YGMeasureModeExactly) {
     // Don't bother sizing the text if both dimensions are already defined.
     node->setLayoutMeasuredDimension(
         ABI26_0_0YGNodeBoundAxis(
@@ -1659,8 +1438,10 @@ static void ABI26_0_0YGNodeEmptyContainerSetMeasuredDimensions(const ABI26_0_0YG
       ABI26_0_0YGNodePaddingAndBorderForAxis(node, ABI26_0_0YGFlexDirectionRow, parentWidth);
   const float paddingAndBorderAxisColumn =
       ABI26_0_0YGNodePaddingAndBorderForAxis(node, ABI26_0_0YGFlexDirectionColumn, parentWidth);
-  const float marginAxisRow = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionRow, parentWidth);
-  const float marginAxisColumn = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionColumn, parentWidth);
+  const float marginAxisRow =
+      node->getMarginForAxis(ABI26_0_0YGFlexDirectionRow, parentWidth);
+  const float marginAxisColumn =
+      node->getMarginForAxis(ABI26_0_0YGFlexDirectionColumn, parentWidth);
 
   node->setLayoutMeasuredDimension(
       ABI26_0_0YGNodeBoundAxis(
@@ -1697,8 +1478,10 @@ static bool ABI26_0_0YGNodeFixedSizeSetMeasuredDimensions(const ABI26_0_0YGNodeR
   if ((widthMeasureMode == ABI26_0_0YGMeasureModeAtMost && availableWidth <= 0.0f) ||
       (heightMeasureMode == ABI26_0_0YGMeasureModeAtMost && availableHeight <= 0.0f) ||
       (widthMeasureMode == ABI26_0_0YGMeasureModeExactly && heightMeasureMode == ABI26_0_0YGMeasureModeExactly)) {
-    const float marginAxisColumn = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionColumn, parentWidth);
-    const float marginAxisRow = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionRow, parentWidth);
+    const float marginAxisColumn =
+        node->getMarginForAxis(ABI26_0_0YGFlexDirectionColumn, parentWidth);
+    const float marginAxisRow =
+        node->getMarginForAxis(ABI26_0_0YGFlexDirectionRow, parentWidth);
 
     node->setLayoutMeasuredDimension(
         ABI26_0_0YGNodeBoundAxis(
@@ -1740,6 +1523,705 @@ static void ABI26_0_0YGZeroOutLayoutRecursivly(const ABI26_0_0YGNodeRef node) {
     const ABI26_0_0YGNodeRef child = node->getChild(i);
     ABI26_0_0YGZeroOutLayoutRecursivly(child);
   }
+}
+
+static float ABI26_0_0YGNodeCalculateAvailableInnerDim(
+    const ABI26_0_0YGNodeRef node,
+    ABI26_0_0YGFlexDirection axis,
+    float availableDim,
+    float parentDim) {
+  ABI26_0_0YGFlexDirection direction =
+      ABI26_0_0YGFlexDirectionIsRow(axis) ? ABI26_0_0YGFlexDirectionRow : ABI26_0_0YGFlexDirectionColumn;
+  ABI26_0_0YGDimension dimension =
+      ABI26_0_0YGFlexDirectionIsRow(axis) ? ABI26_0_0YGDimensionWidth : ABI26_0_0YGDimensionHeight;
+
+  const float margin = node->getMarginForAxis(direction, parentDim);
+  const float paddingAndBorder =
+      ABI26_0_0YGNodePaddingAndBorderForAxis(node, direction, parentDim);
+
+  float availableInnerDim = availableDim - margin - paddingAndBorder;
+  // Max dimension overrides predefined dimension value; Min dimension in turn
+  // overrides both of the above
+  if (!ABI26_0_0YGFloatIsUndefined(availableInnerDim)) {
+    // We want to make sure our available height does not violate min and max
+    // constraints
+    const float minInnerDim =
+        ABI26_0_0YGResolveValue(node->getStyle().minDimensions[dimension], parentDim) -
+        paddingAndBorder;
+    const float maxInnerDim =
+        ABI26_0_0YGResolveValue(node->getStyle().maxDimensions[dimension], parentDim) -
+        paddingAndBorder;
+    availableInnerDim =
+        fmaxf(fminf(availableInnerDim, maxInnerDim), minInnerDim);
+  }
+
+  return availableInnerDim;
+}
+
+static void ABI26_0_0YGNodeComputeFlexBasisForChildren(
+    const ABI26_0_0YGNodeRef node,
+    const float availableInnerWidth,
+    const float availableInnerHeight,
+    ABI26_0_0YGMeasureMode widthMeasureMode,
+    ABI26_0_0YGMeasureMode heightMeasureMode,
+    ABI26_0_0YGDirection direction,
+    ABI26_0_0YGFlexDirection mainAxis,
+    const ABI26_0_0YGConfigRef config,
+    bool performLayout,
+    float& totalOuterFlexBasis) {
+  ABI26_0_0YGNodeRef singleFlexChild = nullptr;
+  ABI26_0_0YGVector children = node->getChildren();
+  ABI26_0_0YGMeasureMode measureModeMainDim =
+      ABI26_0_0YGFlexDirectionIsRow(mainAxis) ? widthMeasureMode : heightMeasureMode;
+  // If there is only one child with flexGrow + flexShrink it means we can set
+  // the computedFlexBasis to 0 instead of measuring and shrinking / flexing the
+  // child to exactly match the remaining space
+  if (measureModeMainDim == ABI26_0_0YGMeasureModeExactly) {
+    for (auto child : children) {
+      if (singleFlexChild != nullptr) {
+        if (child->isNodeFlexible()) {
+          // There is already a flexible child, abort
+          singleFlexChild = nullptr;
+          break;
+        }
+      } else if (
+          child->resolveFlexGrow() > 0.0f &&
+          child->resolveFlexShrink() > 0.0f) {
+        singleFlexChild = child;
+      }
+    }
+  }
+
+  for (auto child : children) {
+    child->resolveDimension();
+    if (child->getStyle().display == ABI26_0_0YGDisplayNone) {
+      ABI26_0_0YGZeroOutLayoutRecursivly(child);
+      child->setHasNewLayout(true);
+      child->setDirty(false);
+      continue;
+    }
+    if (performLayout) {
+      // Set the initial position (relative to the parent).
+      const ABI26_0_0YGDirection childDirection = child->resolveDirection(direction);
+      const float mainDim = ABI26_0_0YGFlexDirectionIsRow(mainAxis)
+          ? availableInnerWidth
+          : availableInnerHeight;
+      const float crossDim = ABI26_0_0YGFlexDirectionIsRow(mainAxis)
+          ? availableInnerHeight
+          : availableInnerWidth;
+      child->setPosition(
+          childDirection, mainDim, crossDim, availableInnerWidth);
+    }
+
+    if (child->getStyle().positionType == ABI26_0_0YGPositionTypeAbsolute) {
+      continue;
+    }
+    if (child == singleFlexChild) {
+      child->setLayoutComputedFlexBasisGeneration(gCurrentGenerationCount);
+      child->setLayoutComputedFlexBasis(0);
+    } else {
+      ABI26_0_0YGNodeComputeFlexBasisForChild(
+          node,
+          child,
+          availableInnerWidth,
+          widthMeasureMode,
+          availableInnerHeight,
+          availableInnerWidth,
+          availableInnerHeight,
+          heightMeasureMode,
+          direction,
+          config);
+    }
+
+    totalOuterFlexBasis += child->getLayout().computedFlexBasis +
+        child->getMarginForAxis(mainAxis, availableInnerWidth);
+  }
+}
+
+// This function assumes that all the children of node have their
+// computedFlexBasis properly computed(To do this use
+// ABI26_0_0YGNodeComputeFlexBasisForChildren function).
+// This function calculates ABI26_0_0YGCollectFlexItemsRowMeasurement
+static ABI26_0_0YGCollectFlexItemsRowValues ABI26_0_0YGCalculateCollectFlexItemsRowValues(
+    const ABI26_0_0YGNodeRef& node,
+    const ABI26_0_0YGDirection parentDirection,
+    const float mainAxisParentSize,
+    const float availableInnerWidth,
+    const float availableInnerMainDim,
+    const uint32_t startOfLineIndex,
+    const uint32_t lineCount) {
+  ABI26_0_0YGCollectFlexItemsRowValues flexAlgoRowMeasurement = {};
+  flexAlgoRowMeasurement.relativeChildren.reserve(node->getChildren().size());
+
+  float sizeConsumedOnCurrentLineIncludingMinConstraint = 0;
+  const ABI26_0_0YGFlexDirection mainAxis = ABI26_0_0YGResolveFlexDirection(
+      node->getStyle().flexDirection, node->resolveDirection(parentDirection));
+  const bool isNodeFlexWrap = node->getStyle().flexWrap != ABI26_0_0YGWrapNoWrap;
+
+  // Add items to the current line until it's full or we run out of items.
+  uint32_t endOfLineIndex = startOfLineIndex;
+  for (; endOfLineIndex < node->getChildrenCount(); endOfLineIndex++) {
+    const ABI26_0_0YGNodeRef child = node->getChild(endOfLineIndex);
+    if (child->getStyle().display == ABI26_0_0YGDisplayNone ||
+        child->getStyle().positionType == ABI26_0_0YGPositionTypeAbsolute) {
+      continue;
+    }
+    child->setLineIndex(lineCount);
+    const float childMarginMainAxis =
+        child->getMarginForAxis(mainAxis, availableInnerWidth);
+    const float flexBasisWithMinAndMaxConstraints =
+        ABI26_0_0YGNodeBoundAxisWithinMinAndMax(
+            child,
+            mainAxis,
+            child->getLayout().computedFlexBasis,
+            mainAxisParentSize);
+
+    // If this is a multi-line flow and this item pushes us over the
+    // available size, we've
+    // hit the end of the current line. Break out of the loop and lay out
+    // the current line.
+    if (sizeConsumedOnCurrentLineIncludingMinConstraint +
+                flexBasisWithMinAndMaxConstraints + childMarginMainAxis >
+            availableInnerMainDim &&
+        isNodeFlexWrap && flexAlgoRowMeasurement.itemsOnLine > 0) {
+      break;
+    }
+
+    sizeConsumedOnCurrentLineIncludingMinConstraint +=
+        flexBasisWithMinAndMaxConstraints + childMarginMainAxis;
+    flexAlgoRowMeasurement.sizeConsumedOnCurrentLine +=
+        flexBasisWithMinAndMaxConstraints + childMarginMainAxis;
+    flexAlgoRowMeasurement.itemsOnLine++;
+
+    if (child->isNodeFlexible()) {
+      flexAlgoRowMeasurement.totalFlexGrowFactors += child->resolveFlexGrow();
+
+      // Unlike the grow factor, the shrink factor is scaled relative to the
+      // child dimension.
+      flexAlgoRowMeasurement.totalFlexShrinkScaledFactors +=
+          -child->resolveFlexShrink() * child->getLayout().computedFlexBasis;
+    }
+
+    flexAlgoRowMeasurement.relativeChildren.push_back(child);
+  }
+
+  // The total flex factor needs to be floored to 1.
+  if (flexAlgoRowMeasurement.totalFlexGrowFactors > 0 &&
+      flexAlgoRowMeasurement.totalFlexGrowFactors < 1) {
+    flexAlgoRowMeasurement.totalFlexGrowFactors = 1;
+  }
+
+  // The total flex shrink factor needs to be floored to 1.
+  if (flexAlgoRowMeasurement.totalFlexShrinkScaledFactors > 0 &&
+      flexAlgoRowMeasurement.totalFlexShrinkScaledFactors < 1) {
+    flexAlgoRowMeasurement.totalFlexShrinkScaledFactors = 1;
+  }
+  flexAlgoRowMeasurement.endOfLineIndex = endOfLineIndex;
+  return flexAlgoRowMeasurement;
+}
+
+// It distributes the free space to the flexible items and ensures that the size
+// of the flex items abide the min and max constraints. At the end of this
+// function the child nodes would have proper size. Prior using this function
+// please ensure that ABI26_0_0YGDistributeFreeSpaceFirstPass is called.
+static float ABI26_0_0YGDistributeFreeSpaceSecondPass(
+    ABI26_0_0YGCollectFlexItemsRowValues& collectedFlexItemsValues,
+    const ABI26_0_0YGNodeRef node,
+    const ABI26_0_0YGFlexDirection mainAxis,
+    const ABI26_0_0YGFlexDirection crossAxis,
+    const float mainAxisParentSize,
+    const float availableInnerMainDim,
+    const float availableInnerCrossDim,
+    const float availableInnerWidth,
+    const float availableInnerHeight,
+    const bool flexBasisOverflows,
+    const ABI26_0_0YGMeasureMode measureModeCrossDim,
+    const bool performLayout,
+    const ABI26_0_0YGConfigRef config) {
+  float childFlexBasis = 0;
+  float flexShrinkScaledFactor = 0;
+  float flexGrowFactor = 0;
+  float deltaFreeSpace = 0;
+  const bool isMainAxisRow = ABI26_0_0YGFlexDirectionIsRow(mainAxis);
+  const bool isNodeFlexWrap = node->getStyle().flexWrap != ABI26_0_0YGWrapNoWrap;
+
+  for (auto currentRelativeChild : collectedFlexItemsValues.relativeChildren) {
+    childFlexBasis = ABI26_0_0YGNodeBoundAxisWithinMinAndMax(
+        currentRelativeChild,
+        mainAxis,
+        currentRelativeChild->getLayout().computedFlexBasis,
+        mainAxisParentSize);
+    float updatedMainSize = childFlexBasis;
+
+    if (collectedFlexItemsValues.remainingFreeSpace < 0) {
+      flexShrinkScaledFactor =
+          -currentRelativeChild->resolveFlexShrink() * childFlexBasis;
+      // Is this child able to shrink?
+      if (flexShrinkScaledFactor != 0) {
+        float childSize;
+
+        if (collectedFlexItemsValues.totalFlexShrinkScaledFactors == 0) {
+          childSize = childFlexBasis + flexShrinkScaledFactor;
+        } else {
+          childSize = childFlexBasis +
+              (collectedFlexItemsValues.remainingFreeSpace /
+               collectedFlexItemsValues.totalFlexShrinkScaledFactors) *
+                  flexShrinkScaledFactor;
+        }
+
+        updatedMainSize = ABI26_0_0YGNodeBoundAxis(
+            currentRelativeChild,
+            mainAxis,
+            childSize,
+            availableInnerMainDim,
+            availableInnerWidth);
+      }
+    } else if (collectedFlexItemsValues.remainingFreeSpace > 0) {
+      flexGrowFactor = currentRelativeChild->resolveFlexGrow();
+
+      // Is this child able to grow?
+      if (flexGrowFactor != 0) {
+        updatedMainSize = ABI26_0_0YGNodeBoundAxis(
+            currentRelativeChild,
+            mainAxis,
+            childFlexBasis +
+                collectedFlexItemsValues.remainingFreeSpace /
+                    collectedFlexItemsValues.totalFlexGrowFactors *
+                    flexGrowFactor,
+            availableInnerMainDim,
+            availableInnerWidth);
+      }
+    }
+
+    deltaFreeSpace += updatedMainSize - childFlexBasis;
+
+    const float marginMain =
+        currentRelativeChild->getMarginForAxis(mainAxis, availableInnerWidth);
+    const float marginCross =
+        currentRelativeChild->getMarginForAxis(crossAxis, availableInnerWidth);
+
+    float childCrossSize;
+    float childMainSize = updatedMainSize + marginMain;
+    ABI26_0_0YGMeasureMode childCrossMeasureMode;
+    ABI26_0_0YGMeasureMode childMainMeasureMode = ABI26_0_0YGMeasureModeExactly;
+
+    if (!ABI26_0_0YGFloatIsUndefined(currentRelativeChild->getStyle().aspectRatio)) {
+      childCrossSize = isMainAxisRow ? (childMainSize - marginMain) /
+              currentRelativeChild->getStyle().aspectRatio
+                                     : (childMainSize - marginMain) *
+              currentRelativeChild->getStyle().aspectRatio;
+      childCrossMeasureMode = ABI26_0_0YGMeasureModeExactly;
+
+      childCrossSize += marginCross;
+    } else if (
+        !ABI26_0_0YGFloatIsUndefined(availableInnerCrossDim) &&
+        !ABI26_0_0YGNodeIsStyleDimDefined(
+            currentRelativeChild, crossAxis, availableInnerCrossDim) &&
+        measureModeCrossDim == ABI26_0_0YGMeasureModeExactly &&
+        !(isNodeFlexWrap && flexBasisOverflows) &&
+        ABI26_0_0YGNodeAlignItem(node, currentRelativeChild) == ABI26_0_0YGAlignStretch &&
+        currentRelativeChild->marginLeadingValue(crossAxis).unit !=
+            ABI26_0_0YGUnitAuto &&
+        currentRelativeChild->marginTrailingValue(crossAxis).unit !=
+            ABI26_0_0YGUnitAuto) {
+      childCrossSize = availableInnerCrossDim;
+      childCrossMeasureMode = ABI26_0_0YGMeasureModeExactly;
+    } else if (!ABI26_0_0YGNodeIsStyleDimDefined(
+                   currentRelativeChild, crossAxis, availableInnerCrossDim)) {
+      childCrossSize = availableInnerCrossDim;
+      childCrossMeasureMode = ABI26_0_0YGFloatIsUndefined(childCrossSize)
+          ? ABI26_0_0YGMeasureModeUndefined
+          : ABI26_0_0YGMeasureModeAtMost;
+    } else {
+      childCrossSize =
+          ABI26_0_0YGResolveValue(
+              currentRelativeChild->getResolvedDimension(dim[crossAxis]),
+              availableInnerCrossDim) +
+          marginCross;
+      const bool isLoosePercentageMeasurement =
+          currentRelativeChild->getResolvedDimension(dim[crossAxis]).unit ==
+              ABI26_0_0YGUnitPercent &&
+          measureModeCrossDim != ABI26_0_0YGMeasureModeExactly;
+      childCrossMeasureMode =
+          ABI26_0_0YGFloatIsUndefined(childCrossSize) || isLoosePercentageMeasurement
+          ? ABI26_0_0YGMeasureModeUndefined
+          : ABI26_0_0YGMeasureModeExactly;
+    }
+
+    ABI26_0_0YGConstrainMaxSizeForMode(
+        currentRelativeChild,
+        mainAxis,
+        availableInnerMainDim,
+        availableInnerWidth,
+        &childMainMeasureMode,
+        &childMainSize);
+    ABI26_0_0YGConstrainMaxSizeForMode(
+        currentRelativeChild,
+        crossAxis,
+        availableInnerCrossDim,
+        availableInnerWidth,
+        &childCrossMeasureMode,
+        &childCrossSize);
+
+    const bool requiresStretchLayout =
+        !ABI26_0_0YGNodeIsStyleDimDefined(
+            currentRelativeChild, crossAxis, availableInnerCrossDim) &&
+        ABI26_0_0YGNodeAlignItem(node, currentRelativeChild) == ABI26_0_0YGAlignStretch &&
+        currentRelativeChild->marginLeadingValue(crossAxis).unit !=
+            ABI26_0_0YGUnitAuto &&
+        currentRelativeChild->marginTrailingValue(crossAxis).unit != ABI26_0_0YGUnitAuto;
+
+    const float childWidth = isMainAxisRow ? childMainSize : childCrossSize;
+    const float childHeight = !isMainAxisRow ? childMainSize : childCrossSize;
+
+    const ABI26_0_0YGMeasureMode childWidthMeasureMode =
+        isMainAxisRow ? childMainMeasureMode : childCrossMeasureMode;
+    const ABI26_0_0YGMeasureMode childHeightMeasureMode =
+        !isMainAxisRow ? childMainMeasureMode : childCrossMeasureMode;
+
+    // Recursively call the layout algorithm for this child with the updated
+    // main size.
+    ABI26_0_0YGLayoutNodeInternal(
+        currentRelativeChild,
+        childWidth,
+        childHeight,
+        node->getLayout().direction,
+        childWidthMeasureMode,
+        childHeightMeasureMode,
+        availableInnerWidth,
+        availableInnerHeight,
+        performLayout && !requiresStretchLayout,
+        "flex",
+        config);
+    node->setLayoutHadOverflow(
+        node->getLayout().hadOverflow |
+        currentRelativeChild->getLayout().hadOverflow);
+  }
+  return deltaFreeSpace;
+}
+
+// It distributes the free space to the flexible items.For those flexible items
+// whose min and max constraints are triggered, those flex item's clamped size
+// is removed from the remaingfreespace.
+static void ABI26_0_0YGDistributeFreeSpaceFirstPass(
+    ABI26_0_0YGCollectFlexItemsRowValues& collectedFlexItemsValues,
+    const ABI26_0_0YGFlexDirection mainAxis,
+    const float mainAxisParentSize,
+    const float availableInnerMainDim,
+    const float availableInnerWidth) {
+  float flexShrinkScaledFactor = 0;
+  float flexGrowFactor = 0;
+  float baseMainSize = 0;
+  float boundMainSize = 0;
+  float deltaFreeSpace = 0;
+
+  for (auto currentRelativeChild : collectedFlexItemsValues.relativeChildren) {
+    float childFlexBasis = ABI26_0_0YGNodeBoundAxisWithinMinAndMax(
+        currentRelativeChild,
+        mainAxis,
+        currentRelativeChild->getLayout().computedFlexBasis,
+        mainAxisParentSize);
+
+    if (collectedFlexItemsValues.remainingFreeSpace < 0) {
+      flexShrinkScaledFactor =
+          -currentRelativeChild->resolveFlexShrink() * childFlexBasis;
+
+      // Is this child able to shrink?
+      if (flexShrinkScaledFactor != 0) {
+        baseMainSize = childFlexBasis +
+            collectedFlexItemsValues.remainingFreeSpace /
+                collectedFlexItemsValues.totalFlexShrinkScaledFactors *
+                flexShrinkScaledFactor;
+        boundMainSize = ABI26_0_0YGNodeBoundAxis(
+            currentRelativeChild,
+            mainAxis,
+            baseMainSize,
+            availableInnerMainDim,
+            availableInnerWidth);
+        if (baseMainSize != boundMainSize) {
+          // By excluding this item's size and flex factor from remaining,
+          // this item's
+          // min/max constraints should also trigger in the second pass
+          // resulting in the
+          // item's size calculation being identical in the first and second
+          // passes.
+          deltaFreeSpace += boundMainSize - childFlexBasis;
+          collectedFlexItemsValues.totalFlexShrinkScaledFactors -=
+              flexShrinkScaledFactor;
+        }
+      }
+    } else if (collectedFlexItemsValues.remainingFreeSpace > 0) {
+      flexGrowFactor = currentRelativeChild->resolveFlexGrow();
+
+      // Is this child able to grow?
+      if (flexGrowFactor != 0) {
+        baseMainSize = childFlexBasis +
+            collectedFlexItemsValues.remainingFreeSpace /
+                collectedFlexItemsValues.totalFlexGrowFactors * flexGrowFactor;
+        boundMainSize = ABI26_0_0YGNodeBoundAxis(
+            currentRelativeChild,
+            mainAxis,
+            baseMainSize,
+            availableInnerMainDim,
+            availableInnerWidth);
+
+        if (baseMainSize != boundMainSize) {
+          // By excluding this item's size and flex factor from remaining,
+          // this item's
+          // min/max constraints should also trigger in the second pass
+          // resulting in the
+          // item's size calculation being identical in the first and second
+          // passes.
+          deltaFreeSpace += boundMainSize - childFlexBasis;
+          collectedFlexItemsValues.totalFlexGrowFactors -= flexGrowFactor;
+        }
+      }
+    }
+  }
+  collectedFlexItemsValues.remainingFreeSpace -= deltaFreeSpace;
+}
+
+// Do two passes over the flex items to figure out how to distribute the
+// remaining space.
+// The first pass finds the items whose min/max constraints trigger,
+// freezes them at those
+// sizes, and excludes those sizes from the remaining space. The second
+// pass sets the size
+// of each flexible item. It distributes the remaining space amongst the
+// items whose min/max
+// constraints didn't trigger in pass 1. For the other items, it sets
+// their sizes by forcing
+// their min/max constraints to trigger again.
+//
+// This two pass approach for resolving min/max constraints deviates from
+// the spec. The
+// spec (https://www.w3.org/TR/ABI26_0_0YG-flexbox-1/#resolve-flexible-lengths)
+// describes a process
+// that needs to be repeated a variable number of times. The algorithm
+// implemented here
+// won't handle all cases but it was simpler to implement and it mitigates
+// performance
+// concerns because we know exactly how many passes it'll do.
+//
+// At the end of this function the child nodes would have the proper size
+// assigned to them.
+//
+static void ABI26_0_0YGResolveFlexibleLength(
+    const ABI26_0_0YGNodeRef node,
+    ABI26_0_0YGCollectFlexItemsRowValues& collectedFlexItemsValues,
+    const ABI26_0_0YGFlexDirection mainAxis,
+    const ABI26_0_0YGFlexDirection crossAxis,
+    const float mainAxisParentSize,
+    const float availableInnerMainDim,
+    const float availableInnerCrossDim,
+    const float availableInnerWidth,
+    const float availableInnerHeight,
+    const bool flexBasisOverflows,
+    const ABI26_0_0YGMeasureMode measureModeCrossDim,
+    const bool performLayout,
+    const ABI26_0_0YGConfigRef config) {
+  const float originalFreeSpace = collectedFlexItemsValues.remainingFreeSpace;
+  // First pass: detect the flex items whose min/max constraints trigger
+  ABI26_0_0YGDistributeFreeSpaceFirstPass(
+      collectedFlexItemsValues,
+      mainAxis,
+      mainAxisParentSize,
+      availableInnerMainDim,
+      availableInnerWidth);
+
+  // Second pass: resolve the sizes of the flexible items
+  const float distributedFreeSpace = ABI26_0_0YGDistributeFreeSpaceSecondPass(
+      collectedFlexItemsValues,
+      node,
+      mainAxis,
+      crossAxis,
+      mainAxisParentSize,
+      availableInnerMainDim,
+      availableInnerCrossDim,
+      availableInnerWidth,
+      availableInnerHeight,
+      flexBasisOverflows,
+      measureModeCrossDim,
+      performLayout,
+      config);
+
+  collectedFlexItemsValues.remainingFreeSpace =
+      originalFreeSpace - distributedFreeSpace;
+}
+
+static void ABI26_0_0YGJustifyMainAxis(
+    const ABI26_0_0YGNodeRef node,
+    ABI26_0_0YGCollectFlexItemsRowValues& collectedFlexItemsValues,
+    const uint32_t& startOfLineIndex,
+    const ABI26_0_0YGFlexDirection& mainAxis,
+    const ABI26_0_0YGFlexDirection& crossAxis,
+    const ABI26_0_0YGMeasureMode& measureModeMainDim,
+    const ABI26_0_0YGMeasureMode& measureModeCrossDim,
+    const float& mainAxisParentSize,
+    const float& parentWidth,
+    const float& availableInnerMainDim,
+    const float& availableInnerCrossDim,
+    const float& availableInnerWidth,
+    const bool& performLayout) {
+  const ABI26_0_0YGStyle style = node->getStyle();
+
+  // If we are using "at most" rules in the main axis. Calculate the remaining
+  // space when constraint by the min size defined for the main axis.
+  if (measureModeMainDim == ABI26_0_0YGMeasureModeAtMost &&
+      collectedFlexItemsValues.remainingFreeSpace > 0) {
+    if (style.minDimensions[dim[mainAxis]].unit != ABI26_0_0YGUnitUndefined &&
+        ABI26_0_0YGResolveValue(
+            style.minDimensions[dim[mainAxis]], mainAxisParentSize) >= 0) {
+      collectedFlexItemsValues.remainingFreeSpace = fmaxf(
+          0,
+          ABI26_0_0YGResolveValue(
+              style.minDimensions[dim[mainAxis]], mainAxisParentSize) -
+              (availableInnerMainDim -
+               collectedFlexItemsValues.remainingFreeSpace));
+    } else {
+      collectedFlexItemsValues.remainingFreeSpace = 0;
+    }
+  }
+
+  int numberOfAutoMarginsOnCurrentLine = 0;
+  for (uint32_t i = startOfLineIndex;
+       i < collectedFlexItemsValues.endOfLineIndex;
+       i++) {
+    const ABI26_0_0YGNodeRef child = node->getChild(i);
+    if (child->getStyle().positionType == ABI26_0_0YGPositionTypeRelative) {
+      if (child->marginLeadingValue(mainAxis).unit == ABI26_0_0YGUnitAuto) {
+        numberOfAutoMarginsOnCurrentLine++;
+      }
+      if (child->marginTrailingValue(mainAxis).unit == ABI26_0_0YGUnitAuto) {
+        numberOfAutoMarginsOnCurrentLine++;
+      }
+    }
+  }
+
+  // In order to position the elements in the main axis, we have two
+  // controls. The space between the beginning and the first element
+  // and the space between each two elements.
+  float leadingMainDim = 0;
+  float betweenMainDim = 0;
+  const ABI26_0_0YGJustify justifyContent = node->getStyle().justifyContent;
+
+  if (numberOfAutoMarginsOnCurrentLine == 0) {
+    switch (justifyContent) {
+      case ABI26_0_0YGJustifyCenter:
+        leadingMainDim = collectedFlexItemsValues.remainingFreeSpace / 2;
+        break;
+      case ABI26_0_0YGJustifyFlexEnd:
+        leadingMainDim = collectedFlexItemsValues.remainingFreeSpace;
+        break;
+      case ABI26_0_0YGJustifySpaceBetween:
+        if (collectedFlexItemsValues.itemsOnLine > 1) {
+          betweenMainDim =
+              fmaxf(collectedFlexItemsValues.remainingFreeSpace, 0) /
+              (collectedFlexItemsValues.itemsOnLine - 1);
+        } else {
+          betweenMainDim = 0;
+        }
+        break;
+      case ABI26_0_0YGJustifySpaceEvenly:
+        // Space is distributed evenly across all elements
+        betweenMainDim = collectedFlexItemsValues.remainingFreeSpace /
+            (collectedFlexItemsValues.itemsOnLine + 1);
+        leadingMainDim = betweenMainDim;
+        break;
+      case ABI26_0_0YGJustifySpaceAround:
+        // Space on the edges is half of the space between elements
+        betweenMainDim = collectedFlexItemsValues.remainingFreeSpace /
+            collectedFlexItemsValues.itemsOnLine;
+        leadingMainDim = betweenMainDim / 2;
+        break;
+      case ABI26_0_0YGJustifyFlexStart:
+        break;
+    }
+  }
+
+  const float leadingPaddingAndBorderMain =
+      node->getLeadingPaddingAndBorder(mainAxis, parentWidth);
+  collectedFlexItemsValues.mainDim =
+      leadingPaddingAndBorderMain + leadingMainDim;
+  collectedFlexItemsValues.crossDim = 0;
+
+  for (uint32_t i = startOfLineIndex;
+       i < collectedFlexItemsValues.endOfLineIndex;
+       i++) {
+    const ABI26_0_0YGNodeRef child = node->getChild(i);
+    const ABI26_0_0YGStyle childStyle = child->getStyle();
+    const ABI26_0_0YGLayout childLayout = child->getLayout();
+    if (childStyle.display == ABI26_0_0YGDisplayNone) {
+      continue;
+    }
+    if (childStyle.positionType == ABI26_0_0YGPositionTypeAbsolute &&
+        child->isLeadingPositionDefined(mainAxis)) {
+      if (performLayout) {
+        // In case the child is position absolute and has left/top being
+        // defined, we override the position to whatever the user said
+        // (and margin/border).
+        child->setLayoutPosition(
+            child->getLeadingPosition(mainAxis, availableInnerMainDim) +
+                node->getLeadingBorder(mainAxis) +
+                child->getLeadingMargin(mainAxis, availableInnerWidth),
+            pos[mainAxis]);
+      }
+    } else {
+      // Now that we placed the element, we need to update the variables.
+      // We need to do that only for relative elements. Absolute elements
+      // do not take part in that phase.
+      if (childStyle.positionType == ABI26_0_0YGPositionTypeRelative) {
+        if (child->marginLeadingValue(mainAxis).unit == ABI26_0_0YGUnitAuto) {
+          collectedFlexItemsValues.mainDim +=
+              collectedFlexItemsValues.remainingFreeSpace /
+              numberOfAutoMarginsOnCurrentLine;
+        }
+
+        if (performLayout) {
+          child->setLayoutPosition(
+              childLayout.position[pos[mainAxis]] +
+                  collectedFlexItemsValues.mainDim,
+              pos[mainAxis]);
+        }
+
+        if (child->marginTrailingValue(mainAxis).unit == ABI26_0_0YGUnitAuto) {
+          collectedFlexItemsValues.mainDim +=
+              collectedFlexItemsValues.remainingFreeSpace /
+              numberOfAutoMarginsOnCurrentLine;
+        }
+        bool canSkipFlex =
+            !performLayout && measureModeCrossDim == ABI26_0_0YGMeasureModeExactly;
+        if (canSkipFlex) {
+          // If we skipped the flex step, then we can't rely on the
+          // measuredDims because
+          // they weren't computed. This means we can't call
+          // ABI26_0_0YGNodeDimWithMargin.
+          collectedFlexItemsValues.mainDim += betweenMainDim +
+              child->getMarginForAxis(mainAxis, availableInnerWidth) +
+              childLayout.computedFlexBasis;
+          collectedFlexItemsValues.crossDim = availableInnerCrossDim;
+        } else {
+          // The main dimension is the sum of all the elements dimension plus
+          // the spacing.
+          collectedFlexItemsValues.mainDim += betweenMainDim +
+              ABI26_0_0YGNodeDimWithMargin(child, mainAxis, availableInnerWidth);
+
+          // The cross dimension is the max of the elements dimension since
+          // there can only be one element in that cross dimension.
+          collectedFlexItemsValues.crossDim = fmaxf(
+              collectedFlexItemsValues.crossDim,
+              ABI26_0_0YGNodeDimWithMargin(child, crossAxis, availableInnerWidth));
+        }
+      } else if (performLayout) {
+        child->setLayoutPosition(
+            childLayout.position[pos[mainAxis]] +
+                node->getLeadingBorder(mainAxis) + leadingMainDim,
+            pos[mainAxis]);
+      }
+    }
+  }
+  collectedFlexItemsValues.mainDim +=
+      node->getTrailingPaddingAndBorder(mainAxis, parentWidth);
 }
 
 //
@@ -1850,7 +2332,7 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
                    "ABI26_0_0YGMeasureModeUndefined");
 
   // Set the resolved resolution in the node's layout.
-  const ABI26_0_0YGDirection direction = ABI26_0_0YGNodeResolveDirection(node, parentDirection);
+  const ABI26_0_0YGDirection direction = node->resolveDirection(parentDirection);
   node->setLayoutDirection(direction);
 
   const ABI26_0_0YGFlexDirection flexRowDirection = ABI26_0_0YGResolveFlexDirection(ABI26_0_0YGFlexDirectionRow, direction);
@@ -1858,33 +2340,28 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
       ABI26_0_0YGResolveFlexDirection(ABI26_0_0YGFlexDirectionColumn, direction);
 
   node->setLayoutMargin(
-      ABI26_0_0YGNodeLeadingMargin(node, flexRowDirection, parentWidth), ABI26_0_0YGEdgeStart);
+      node->getLeadingMargin(flexRowDirection, parentWidth), ABI26_0_0YGEdgeStart);
   node->setLayoutMargin(
-      ABI26_0_0YGNodeTrailingMargin(node, flexRowDirection, parentWidth), ABI26_0_0YGEdgeEnd);
+      node->getTrailingMargin(flexRowDirection, parentWidth), ABI26_0_0YGEdgeEnd);
   node->setLayoutMargin(
-      ABI26_0_0YGNodeLeadingMargin(node, flexColumnDirection, parentWidth), ABI26_0_0YGEdgeTop);
+      node->getLeadingMargin(flexColumnDirection, parentWidth), ABI26_0_0YGEdgeTop);
   node->setLayoutMargin(
-      ABI26_0_0YGNodeTrailingMargin(node, flexColumnDirection, parentWidth),
-      ABI26_0_0YGEdgeBottom);
+      node->getTrailingMargin(flexColumnDirection, parentWidth), ABI26_0_0YGEdgeBottom);
 
+  node->setLayoutBorder(node->getLeadingBorder(flexRowDirection), ABI26_0_0YGEdgeStart);
+  node->setLayoutBorder(node->getTrailingBorder(flexRowDirection), ABI26_0_0YGEdgeEnd);
+  node->setLayoutBorder(node->getLeadingBorder(flexColumnDirection), ABI26_0_0YGEdgeTop);
   node->setLayoutBorder(
-      ABI26_0_0YGNodeLeadingBorder(node, flexRowDirection), ABI26_0_0YGEdgeStart);
-  node->setLayoutBorder(
-      ABI26_0_0YGNodeTrailingBorder(node, flexRowDirection), ABI26_0_0YGEdgeEnd);
-  node->setLayoutBorder(
-      ABI26_0_0YGNodeLeadingBorder(node, flexColumnDirection), ABI26_0_0YGEdgeTop);
-  node->setLayoutBorder(
-      ABI26_0_0YGNodeTrailingBorder(node, flexColumnDirection), ABI26_0_0YGEdgeBottom);
+      node->getTrailingBorder(flexColumnDirection), ABI26_0_0YGEdgeBottom);
 
   node->setLayoutPadding(
-      ABI26_0_0YGNodeLeadingPadding(node, flexRowDirection, parentWidth), ABI26_0_0YGEdgeStart);
+      node->getLeadingPadding(flexRowDirection, parentWidth), ABI26_0_0YGEdgeStart);
   node->setLayoutPadding(
-      ABI26_0_0YGNodeTrailingPadding(node, flexRowDirection, parentWidth), ABI26_0_0YGEdgeEnd);
+      node->getTrailingPadding(flexRowDirection, parentWidth), ABI26_0_0YGEdgeEnd);
   node->setLayoutPadding(
-      ABI26_0_0YGNodeLeadingPadding(node, flexColumnDirection, parentWidth), ABI26_0_0YGEdgeTop);
+      node->getLeadingPadding(flexColumnDirection, parentWidth), ABI26_0_0YGEdgeTop);
   node->setLayoutPadding(
-      ABI26_0_0YGNodeTrailingPadding(node, flexColumnDirection, parentWidth),
-      ABI26_0_0YGEdgeBottom);
+      node->getTrailingPadding(flexColumnDirection, parentWidth), ABI26_0_0YGEdgeBottom);
 
   if (node->getMeasure() != nullptr) {
     ABI26_0_0YGNodeWithMeasureFuncSetMeasuredDimensions(node,
@@ -1931,21 +2408,13 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
       ABI26_0_0YGResolveFlexDirection(node->getStyle().flexDirection, direction);
   const ABI26_0_0YGFlexDirection crossAxis = ABI26_0_0YGFlexDirectionCross(mainAxis, direction);
   const bool isMainAxisRow = ABI26_0_0YGFlexDirectionIsRow(mainAxis);
-  const ABI26_0_0YGJustify justifyContent = node->getStyle().justifyContent;
   const bool isNodeFlexWrap = node->getStyle().flexWrap != ABI26_0_0YGWrapNoWrap;
 
   const float mainAxisParentSize = isMainAxisRow ? parentWidth : parentHeight;
   const float crossAxisParentSize = isMainAxisRow ? parentHeight : parentWidth;
 
-  ABI26_0_0YGNodeRef firstAbsoluteChild = nullptr;
-  ABI26_0_0YGNodeRef currentAbsoluteChild = nullptr;
-
-  const float leadingPaddingAndBorderMain =
-      ABI26_0_0YGNodeLeadingPaddingAndBorder(node, mainAxis, parentWidth);
-  const float trailingPaddingAndBorderMain =
-      ABI26_0_0YGNodeTrailingPaddingAndBorder(node, mainAxis, parentWidth);
   const float leadingPaddingAndBorderCross =
-      ABI26_0_0YGNodeLeadingPaddingAndBorder(node, crossAxis, parentWidth);
+      node->getLeadingPaddingAndBorder(crossAxis, parentWidth);
   const float paddingAndBorderAxisMain = ABI26_0_0YGNodePaddingAndBorderForAxis(node, mainAxis, parentWidth);
   const float paddingAndBorderAxisCross =
       ABI26_0_0YGNodePaddingAndBorderForAxis(node, crossAxis, parentWidth);
@@ -1958,10 +2427,11 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
   const float paddingAndBorderAxisColumn =
       isMainAxisRow ? paddingAndBorderAxisCross : paddingAndBorderAxisMain;
 
-  const float marginAxisRow = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionRow, parentWidth);
-  const float marginAxisColumn = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionColumn, parentWidth);
+  const float marginAxisRow =
+      node->getMarginForAxis(ABI26_0_0YGFlexDirectionRow, parentWidth);
+  const float marginAxisColumn =
+      node->getMarginForAxis(ABI26_0_0YGFlexDirectionColumn, parentWidth);
 
-  // STEP 2: DETERMINE AVAILABLE SIZE IN MAIN AND CROSS DIRECTIONS
   const float minInnerWidth =
       ABI26_0_0YGResolveValue(
           node->getStyle().minDimensions[ABI26_0_0YGDimensionWidth], parentWidth) -
@@ -1978,112 +2448,45 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
       ABI26_0_0YGResolveValue(
           node->getStyle().maxDimensions[ABI26_0_0YGDimensionHeight], parentHeight) -
       paddingAndBorderAxisColumn;
+
   const float minInnerMainDim = isMainAxisRow ? minInnerWidth : minInnerHeight;
   const float maxInnerMainDim = isMainAxisRow ? maxInnerWidth : maxInnerHeight;
 
-  // Max dimension overrides predefined dimension value; Min dimension in turn overrides both of the
-  // above
-  float availableInnerWidth = availableWidth - marginAxisRow - paddingAndBorderAxisRow;
-  if (!ABI26_0_0YGFloatIsUndefined(availableInnerWidth)) {
-    // We want to make sure our available width does not violate min and max constraints
-    availableInnerWidth = fmaxf(fminf(availableInnerWidth, maxInnerWidth), minInnerWidth);
-  }
+  // STEP 2: DETERMINE AVAILABLE SIZE IN MAIN AND CROSS DIRECTIONS
 
-  float availableInnerHeight = availableHeight - marginAxisColumn - paddingAndBorderAxisColumn;
-  if (!ABI26_0_0YGFloatIsUndefined(availableInnerHeight)) {
-    // We want to make sure our available height does not violate min and max constraints
-    availableInnerHeight = fmaxf(fminf(availableInnerHeight, maxInnerHeight), minInnerHeight);
-  }
+  float availableInnerWidth = ABI26_0_0YGNodeCalculateAvailableInnerDim(
+      node, ABI26_0_0YGFlexDirectionRow, availableWidth, parentWidth);
+  float availableInnerHeight = ABI26_0_0YGNodeCalculateAvailableInnerDim(
+      node, ABI26_0_0YGFlexDirectionColumn, availableHeight, parentHeight);
 
-  float availableInnerMainDim = isMainAxisRow ? availableInnerWidth : availableInnerHeight;
-  const float availableInnerCrossDim = isMainAxisRow ? availableInnerHeight : availableInnerWidth;
-
-  // If there is only one child with flexGrow + flexShrink it means we can set the
-  // computedFlexBasis to 0 instead of measuring and shrinking / flexing the child to exactly
-  // match the remaining space
-  ABI26_0_0YGNodeRef singleFlexChild = nullptr;
-  if (measureModeMainDim == ABI26_0_0YGMeasureModeExactly) {
-    for (uint32_t i = 0; i < childCount; i++) {
-      const ABI26_0_0YGNodeRef child = ABI26_0_0YGNodeGetChild(node, i);
-      if (singleFlexChild) {
-        if (ABI26_0_0YGNodeIsFlex(child)) {
-          // There is already a flexible child, abort.
-          singleFlexChild = nullptr;
-          break;
-        }
-      } else if (
-          child->resolveFlexGrow() > 0.0f &&
-          child->resolveFlexShrink() > 0.0f) {
-        singleFlexChild = child;
-      }
-    }
-  }
+  float availableInnerMainDim =
+      isMainAxisRow ? availableInnerWidth : availableInnerHeight;
+  const float availableInnerCrossDim =
+      isMainAxisRow ? availableInnerHeight : availableInnerWidth;
 
   float totalOuterFlexBasis = 0;
 
   // STEP 3: DETERMINE FLEX BASIS FOR EACH ITEM
-  for (uint32_t i = 0; i < childCount; i++) {
-    const ABI26_0_0YGNodeRef child = node->getChild(i);
-    if (child->getStyle().display == ABI26_0_0YGDisplayNone) {
-      ABI26_0_0YGZeroOutLayoutRecursivly(child);
-      child->setHasNewLayout(true);
-      child->setDirty(false);
-      continue;
-    }
-    child->resolveDimension();
-    if (performLayout) {
-      // Set the initial position (relative to the parent).
-      const ABI26_0_0YGDirection childDirection = ABI26_0_0YGNodeResolveDirection(child, direction);
-      ABI26_0_0YGNodeSetPosition(child,
-                        childDirection,
-                        availableInnerMainDim,
-                        availableInnerCrossDim,
-                        availableInnerWidth);
-    }
 
-    // Absolute-positioned children don't participate in flex layout. Add them
-    // to a list that we can process later.
-    if (child->getStyle().positionType == ABI26_0_0YGPositionTypeAbsolute) {
-      // Store a private linked list of absolutely positioned children
-      // so that we can efficiently traverse them later.
-      if (firstAbsoluteChild == nullptr) {
-        firstAbsoluteChild = child;
-      }
-      if (currentAbsoluteChild != nullptr) {
-        currentAbsoluteChild->setNextChild(child);
-      }
-      currentAbsoluteChild = child;
-      child->setNextChild(nullptr);
-    } else {
-      if (child == singleFlexChild) {
-        child->setLayoutComputedFlexBasisGeneration(gCurrentGenerationCount);
-        child->setLayoutComputedFlexBasis(0);
-      } else {
-        ABI26_0_0YGNodeComputeFlexBasisForChild(node,
-                                       child,
-                                       availableInnerWidth,
-                                       widthMeasureMode,
-                                       availableInnerHeight,
-                                       availableInnerWidth,
-                                       availableInnerHeight,
-                                       heightMeasureMode,
-                                       direction,
-                                       config);
-      }
-    }
-
-    totalOuterFlexBasis += child->getLayout().computedFlexBasis +
-        ABI26_0_0YGNodeMarginForAxis(child, mainAxis, availableInnerWidth);
-    ;
-  }
+  ABI26_0_0YGNodeComputeFlexBasisForChildren(
+      node,
+      availableInnerWidth,
+      availableInnerHeight,
+      widthMeasureMode,
+      heightMeasureMode,
+      direction,
+      mainAxis,
+      config,
+      performLayout,
+      totalOuterFlexBasis);
 
   const bool flexBasisOverflows = measureModeMainDim == ABI26_0_0YGMeasureModeUndefined
-                                      ? false
-                                      : totalOuterFlexBasis > availableInnerMainDim;
-  if (isNodeFlexWrap && flexBasisOverflows && measureModeMainDim == ABI26_0_0YGMeasureModeAtMost) {
+      ? false
+      : totalOuterFlexBasis > availableInnerMainDim;
+  if (isNodeFlexWrap && flexBasisOverflows &&
+      measureModeMainDim == ABI26_0_0YGMeasureModeAtMost) {
     measureModeMainDim = ABI26_0_0YGMeasureModeExactly;
   }
-
   // STEP 4: COLLECT FLEX ITEMS INTO FLEX LINES
 
   // Indexes of children that represent the first and last items in the line.
@@ -2098,104 +2501,23 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
 
   // Max main dimension of all the lines.
   float maxLineMainDim = 0;
-
-  for (; endOfLineIndex < childCount; lineCount++, startOfLineIndex = endOfLineIndex) {
-    // Number of items on the currently line. May be different than the
-    // difference
-    // between start and end indicates because we skip over absolute-positioned
-    // items.
-    uint32_t itemsOnLine = 0;
-
-    // sizeConsumedOnCurrentLine is accumulation of the dimensions and margin
-    // of all the children on the current line. This will be used in order to
-    // either set the dimensions of the node if none already exist or to compute
-    // the remaining space left for the flexible children.
-    float sizeConsumedOnCurrentLine = 0;
-    float sizeConsumedOnCurrentLineIncludingMinConstraint = 0;
-
-    float totalFlexGrowFactors = 0;
-    float totalFlexShrinkScaledFactors = 0;
-
-    // Maintain a linked list of the child nodes that can shrink and/or grow.
-    ABI26_0_0YGNodeRef firstRelativeChild = nullptr;
-    ABI26_0_0YGNodeRef currentRelativeChild = nullptr;
-
-    // Add items to the current line until it's full or we run out of items.
-    for (uint32_t i = startOfLineIndex; i < childCount; i++, endOfLineIndex++) {
-      const ABI26_0_0YGNodeRef child = node->getChild(i);
-      if (child->getStyle().display == ABI26_0_0YGDisplayNone) {
-        continue;
-      }
-      child->setLineIndex(lineCount);
-
-      if (child->getStyle().positionType != ABI26_0_0YGPositionTypeAbsolute) {
-        const float childMarginMainAxis = ABI26_0_0YGNodeMarginForAxis(child, mainAxis, availableInnerWidth);
-        const float flexBasisWithMaxConstraints = fminf(
-            ABI26_0_0YGResolveValue(
-                child->getStyle().maxDimensions[dim[mainAxis]],
-                mainAxisParentSize),
-            child->getLayout().computedFlexBasis);
-        const float flexBasisWithMinAndMaxConstraints = fmaxf(
-            ABI26_0_0YGResolveValue(
-                child->getStyle().minDimensions[dim[mainAxis]],
-                mainAxisParentSize),
-            flexBasisWithMaxConstraints);
-
-        // If this is a multi-line flow and this item pushes us over the
-        // available size, we've
-        // hit the end of the current line. Break out of the loop and lay out
-        // the current line.
-        if (sizeConsumedOnCurrentLineIncludingMinConstraint + flexBasisWithMinAndMaxConstraints +
-                    childMarginMainAxis >
-                availableInnerMainDim &&
-            isNodeFlexWrap && itemsOnLine > 0) {
-          break;
-        }
-
-        sizeConsumedOnCurrentLineIncludingMinConstraint +=
-            flexBasisWithMinAndMaxConstraints + childMarginMainAxis;
-        sizeConsumedOnCurrentLine += flexBasisWithMinAndMaxConstraints + childMarginMainAxis;
-        itemsOnLine++;
-
-        if (ABI26_0_0YGNodeIsFlex(child)) {
-          totalFlexGrowFactors += child->resolveFlexGrow();
-
-          // Unlike the grow factor, the shrink factor is scaled relative to the child dimension.
-          totalFlexShrinkScaledFactors += -child->resolveFlexShrink() *
-              child->getLayout().computedFlexBasis;
-        }
-
-        // Store a private linked list of children that need to be layed out.
-        if (firstRelativeChild == nullptr) {
-          firstRelativeChild = child;
-        }
-        if (currentRelativeChild != nullptr) {
-          currentRelativeChild->setNextChild(child);
-        }
-        currentRelativeChild = child;
-        child->setNextChild(nullptr);
-      }
-    }
-
-    // The total flex factor needs to be floored to 1.
-    if (totalFlexGrowFactors > 0 && totalFlexGrowFactors < 1) {
-      totalFlexGrowFactors = 1;
-    }
-
-    // The total flex shrink factor needs to be floored to 1.
-    if (totalFlexShrinkScaledFactors > 0 && totalFlexShrinkScaledFactors < 1) {
-      totalFlexShrinkScaledFactors = 1;
-    }
+  ABI26_0_0YGCollectFlexItemsRowValues collectedFlexItemsValues;
+  for (; endOfLineIndex < childCount;
+       lineCount++, startOfLineIndex = endOfLineIndex) {
+    collectedFlexItemsValues = ABI26_0_0YGCalculateCollectFlexItemsRowValues(
+        node,
+        parentDirection,
+        mainAxisParentSize,
+        availableInnerWidth,
+        availableInnerMainDim,
+        startOfLineIndex,
+        lineCount);
+    endOfLineIndex = collectedFlexItemsValues.endOfLineIndex;
 
     // If we don't need to measure the cross axis, we can skip the entire flex
     // step.
-    const bool canSkipFlex = !performLayout && measureModeCrossDim == ABI26_0_0YGMeasureModeExactly;
-
-    // In order to position the elements in the main axis, we have two
-    // controls. The space between the beginning and the first element
-    // and the space between each two elements.
-    float leadingMainDim = 0;
-    float betweenMainDim = 0;
+    const bool canSkipFlex =
+        !performLayout && measureModeCrossDim == ABI26_0_0YGMeasureModeExactly;
 
     // STEP 5: RESOLVING FLEXIBLE LENGTHS ON MAIN AXIS
     // Calculate the remaining available space that needs to be allocated.
@@ -2205,301 +2527,65 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
     bool sizeBasedOnContent = false;
     // If we don't measure with exact main dimension we want to ensure we don't violate min and max
     if (measureModeMainDim != ABI26_0_0YGMeasureModeExactly) {
-      if (!ABI26_0_0YGFloatIsUndefined(minInnerMainDim) && sizeConsumedOnCurrentLine < minInnerMainDim) {
+      if (!ABI26_0_0YGFloatIsUndefined(minInnerMainDim) &&
+          collectedFlexItemsValues.sizeConsumedOnCurrentLine <
+              minInnerMainDim) {
         availableInnerMainDim = minInnerMainDim;
-      } else if (!ABI26_0_0YGFloatIsUndefined(maxInnerMainDim) &&
-                 sizeConsumedOnCurrentLine > maxInnerMainDim) {
+      } else if (
+          !ABI26_0_0YGFloatIsUndefined(maxInnerMainDim) &&
+          collectedFlexItemsValues.sizeConsumedOnCurrentLine >
+              maxInnerMainDim) {
         availableInnerMainDim = maxInnerMainDim;
       } else {
         if (!node->getConfig()->useLegacyStretchBehaviour &&
-            (totalFlexGrowFactors == 0 || node->resolveFlexGrow() == 0)) {
-          // If we don't have any children to flex or we can't flex the node itself,
-          // space we've used is all space we need. Root node also should be shrunk to minimum
-          availableInnerMainDim = sizeConsumedOnCurrentLine;
+            (collectedFlexItemsValues.totalFlexGrowFactors == 0 ||
+             node->resolveFlexGrow() == 0)) {
+          // If we don't have any children to flex or we can't flex the node
+          // itself, space we've used is all space we need. Root node also
+          // should be shrunk to minimum
+          availableInnerMainDim =
+              collectedFlexItemsValues.sizeConsumedOnCurrentLine;
+        }
+
+        if (node->getConfig()->useLegacyStretchBehaviour) {
+          node->setLayoutDidUseLegacyFlag(true);
         }
         sizeBasedOnContent = !node->getConfig()->useLegacyStretchBehaviour;
       }
     }
 
-    float remainingFreeSpace = 0;
     if (!sizeBasedOnContent && !ABI26_0_0YGFloatIsUndefined(availableInnerMainDim)) {
-      remainingFreeSpace = availableInnerMainDim - sizeConsumedOnCurrentLine;
-    } else if (sizeConsumedOnCurrentLine < 0) {
+      collectedFlexItemsValues.remainingFreeSpace = availableInnerMainDim -
+          collectedFlexItemsValues.sizeConsumedOnCurrentLine;
+    } else if (collectedFlexItemsValues.sizeConsumedOnCurrentLine < 0) {
       // availableInnerMainDim is indefinite which means the node is being sized based on its
       // content.
       // sizeConsumedOnCurrentLine is negative which means the node will allocate 0 points for
       // its content. Consequently, remainingFreeSpace is 0 - sizeConsumedOnCurrentLine.
-      remainingFreeSpace = -sizeConsumedOnCurrentLine;
+      collectedFlexItemsValues.remainingFreeSpace =
+          -collectedFlexItemsValues.sizeConsumedOnCurrentLine;
     }
-
-    const float originalRemainingFreeSpace = remainingFreeSpace;
-    float deltaFreeSpace = 0;
 
     if (!canSkipFlex) {
-      float childFlexBasis;
-      float flexShrinkScaledFactor;
-      float flexGrowFactor;
-      float baseMainSize;
-      float boundMainSize;
-
-      // Do two passes over the flex items to figure out how to distribute the
-      // remaining space.
-      // The first pass finds the items whose min/max constraints trigger,
-      // freezes them at those
-      // sizes, and excludes those sizes from the remaining space. The second
-      // pass sets the size
-      // of each flexible item. It distributes the remaining space amongst the
-      // items whose min/max
-      // constraints didn't trigger in pass 1. For the other items, it sets
-      // their sizes by forcing
-      // their min/max constraints to trigger again.
-      //
-      // This two pass approach for resolving min/max constraints deviates from
-      // the spec. The
-      // spec (https://www.w3.org/TR/ABI26_0_0YG-flexbox-1/#resolve-flexible-lengths)
-      // describes a process
-      // that needs to be repeated a variable number of times. The algorithm
-      // implemented here
-      // won't handle all cases but it was simpler to implement and it mitigates
-      // performance
-      // concerns because we know exactly how many passes it'll do.
-
-      // First pass: detect the flex items whose min/max constraints trigger
-      float deltaFlexShrinkScaledFactors = 0;
-      float deltaFlexGrowFactors = 0;
-      currentRelativeChild = firstRelativeChild;
-      while (currentRelativeChild != nullptr) {
-        childFlexBasis = fminf(
-            ABI26_0_0YGResolveValue(
-                currentRelativeChild->getStyle().maxDimensions[dim[mainAxis]],
-                mainAxisParentSize),
-            fmaxf(
-                ABI26_0_0YGResolveValue(
-                    currentRelativeChild->getStyle()
-                        .minDimensions[dim[mainAxis]],
-                    mainAxisParentSize),
-                currentRelativeChild->getLayout().computedFlexBasis));
-
-        if (remainingFreeSpace < 0) {
-          flexShrinkScaledFactor =
-              -currentRelativeChild->resolveFlexShrink() * childFlexBasis;
-
-          // Is this child able to shrink?
-          if (flexShrinkScaledFactor != 0) {
-            baseMainSize =
-                childFlexBasis +
-                remainingFreeSpace / totalFlexShrinkScaledFactors * flexShrinkScaledFactor;
-            boundMainSize = ABI26_0_0YGNodeBoundAxis(currentRelativeChild,
-                                            mainAxis,
-                                            baseMainSize,
-                                            availableInnerMainDim,
-                                            availableInnerWidth);
-            if (baseMainSize != boundMainSize) {
-              // By excluding this item's size and flex factor from remaining,
-              // this item's
-              // min/max constraints should also trigger in the second pass
-              // resulting in the
-              // item's size calculation being identical in the first and second
-              // passes.
-              deltaFreeSpace -= boundMainSize - childFlexBasis;
-              deltaFlexShrinkScaledFactors -= flexShrinkScaledFactor;
-            }
-          }
-        } else if (remainingFreeSpace > 0) {
-          flexGrowFactor = currentRelativeChild->resolveFlexGrow();
-
-          // Is this child able to grow?
-          if (flexGrowFactor != 0) {
-            baseMainSize =
-                childFlexBasis + remainingFreeSpace / totalFlexGrowFactors * flexGrowFactor;
-            boundMainSize = ABI26_0_0YGNodeBoundAxis(currentRelativeChild,
-                                            mainAxis,
-                                            baseMainSize,
-                                            availableInnerMainDim,
-                                            availableInnerWidth);
-
-            if (baseMainSize != boundMainSize) {
-              // By excluding this item's size and flex factor from remaining,
-              // this item's
-              // min/max constraints should also trigger in the second pass
-              // resulting in the
-              // item's size calculation being identical in the first and second
-              // passes.
-              deltaFreeSpace -= boundMainSize - childFlexBasis;
-              deltaFlexGrowFactors -= flexGrowFactor;
-            }
-          }
-        }
-
-        currentRelativeChild = currentRelativeChild->getNextChild();
-      }
-
-      totalFlexShrinkScaledFactors += deltaFlexShrinkScaledFactors;
-      totalFlexGrowFactors += deltaFlexGrowFactors;
-      remainingFreeSpace += deltaFreeSpace;
-
-      // Second pass: resolve the sizes of the flexible items
-      deltaFreeSpace = 0;
-      currentRelativeChild = firstRelativeChild;
-      while (currentRelativeChild != nullptr) {
-        childFlexBasis = fminf(
-            ABI26_0_0YGResolveValue(
-                currentRelativeChild->getStyle().maxDimensions[dim[mainAxis]],
-                mainAxisParentSize),
-            fmaxf(
-                ABI26_0_0YGResolveValue(
-                    currentRelativeChild->getStyle()
-                        .minDimensions[dim[mainAxis]],
-                    mainAxisParentSize),
-                currentRelativeChild->getLayout().computedFlexBasis));
-        float updatedMainSize = childFlexBasis;
-
-        if (remainingFreeSpace < 0) {
-          flexShrinkScaledFactor =
-              -currentRelativeChild->resolveFlexShrink() * childFlexBasis;
-          // Is this child able to shrink?
-          if (flexShrinkScaledFactor != 0) {
-            float childSize;
-
-            if (totalFlexShrinkScaledFactors == 0) {
-              childSize = childFlexBasis + flexShrinkScaledFactor;
-            } else {
-              childSize =
-                  childFlexBasis +
-                  (remainingFreeSpace / totalFlexShrinkScaledFactors) * flexShrinkScaledFactor;
-            }
-
-            updatedMainSize = ABI26_0_0YGNodeBoundAxis(currentRelativeChild,
-                                              mainAxis,
-                                              childSize,
-                                              availableInnerMainDim,
-                                              availableInnerWidth);
-          }
-        } else if (remainingFreeSpace > 0) {
-          flexGrowFactor = currentRelativeChild->resolveFlexGrow();
-
-          // Is this child able to grow?
-          if (flexGrowFactor != 0) {
-            updatedMainSize =
-                ABI26_0_0YGNodeBoundAxis(currentRelativeChild,
-                                mainAxis,
-                                childFlexBasis +
-                                    remainingFreeSpace / totalFlexGrowFactors * flexGrowFactor,
-                                availableInnerMainDim,
-                                availableInnerWidth);
-          }
-        }
-
-        deltaFreeSpace -= updatedMainSize - childFlexBasis;
-
-        const float marginMain =
-            ABI26_0_0YGNodeMarginForAxis(currentRelativeChild, mainAxis, availableInnerWidth);
-        const float marginCross =
-            ABI26_0_0YGNodeMarginForAxis(currentRelativeChild, crossAxis, availableInnerWidth);
-
-        float childCrossSize;
-        float childMainSize = updatedMainSize + marginMain;
-        ABI26_0_0YGMeasureMode childCrossMeasureMode;
-        ABI26_0_0YGMeasureMode childMainMeasureMode = ABI26_0_0YGMeasureModeExactly;
-
-        if (!ABI26_0_0YGFloatIsUndefined(currentRelativeChild->getStyle().aspectRatio)) {
-          childCrossSize = isMainAxisRow ? (childMainSize - marginMain) /
-                  currentRelativeChild->getStyle().aspectRatio
-                                         : (childMainSize - marginMain) *
-                  currentRelativeChild->getStyle().aspectRatio;
-          childCrossMeasureMode = ABI26_0_0YGMeasureModeExactly;
-
-          childCrossSize += marginCross;
-        } else if (
-            !ABI26_0_0YGFloatIsUndefined(availableInnerCrossDim) &&
-            !ABI26_0_0YGNodeIsStyleDimDefined(
-                currentRelativeChild, crossAxis, availableInnerCrossDim) &&
-            measureModeCrossDim == ABI26_0_0YGMeasureModeExactly &&
-            !(isNodeFlexWrap && flexBasisOverflows) &&
-            ABI26_0_0YGNodeAlignItem(node, currentRelativeChild) == ABI26_0_0YGAlignStretch &&
-            currentRelativeChild->marginLeadingValue(crossAxis).unit !=
-                ABI26_0_0YGUnitAuto &&
-            currentRelativeChild->marginTrailingValue(crossAxis).unit !=
-                ABI26_0_0YGUnitAuto) {
-          childCrossSize = availableInnerCrossDim;
-          childCrossMeasureMode = ABI26_0_0YGMeasureModeExactly;
-        } else if (!ABI26_0_0YGNodeIsStyleDimDefined(currentRelativeChild,
-                                            crossAxis,
-                                            availableInnerCrossDim)) {
-          childCrossSize = availableInnerCrossDim;
-          childCrossMeasureMode =
-              ABI26_0_0YGFloatIsUndefined(childCrossSize) ? ABI26_0_0YGMeasureModeUndefined : ABI26_0_0YGMeasureModeAtMost;
-        } else {
-          childCrossSize =
-              ABI26_0_0YGResolveValue(
-                  currentRelativeChild->getResolvedDimension(dim[crossAxis]),
-                  availableInnerCrossDim) +
-              marginCross;
-          const bool isLoosePercentageMeasurement =
-              currentRelativeChild->getResolvedDimension(dim[crossAxis]).unit ==
-                  ABI26_0_0YGUnitPercent &&
-              measureModeCrossDim != ABI26_0_0YGMeasureModeExactly;
-          childCrossMeasureMode =
-              ABI26_0_0YGFloatIsUndefined(childCrossSize) || isLoosePercentageMeasurement
-              ? ABI26_0_0YGMeasureModeUndefined
-              : ABI26_0_0YGMeasureModeExactly;
-        }
-
-        ABI26_0_0YGConstrainMaxSizeForMode(
-            currentRelativeChild,
-            mainAxis,
-            availableInnerMainDim,
-            availableInnerWidth,
-            &childMainMeasureMode,
-            &childMainSize);
-        ABI26_0_0YGConstrainMaxSizeForMode(
-            currentRelativeChild,
-            crossAxis,
-            availableInnerCrossDim,
-            availableInnerWidth,
-            &childCrossMeasureMode,
-            &childCrossSize);
-
-        const bool requiresStretchLayout =
-            !ABI26_0_0YGNodeIsStyleDimDefined(
-                currentRelativeChild, crossAxis, availableInnerCrossDim) &&
-            ABI26_0_0YGNodeAlignItem(node, currentRelativeChild) == ABI26_0_0YGAlignStretch &&
-            currentRelativeChild->marginLeadingValue(crossAxis).unit !=
-                ABI26_0_0YGUnitAuto &&
-            currentRelativeChild->marginTrailingValue(crossAxis).unit !=
-                ABI26_0_0YGUnitAuto;
-
-        const float childWidth = isMainAxisRow ? childMainSize : childCrossSize;
-        const float childHeight = !isMainAxisRow ? childMainSize : childCrossSize;
-
-        const ABI26_0_0YGMeasureMode childWidthMeasureMode =
-            isMainAxisRow ? childMainMeasureMode : childCrossMeasureMode;
-        const ABI26_0_0YGMeasureMode childHeightMeasureMode =
-            !isMainAxisRow ? childMainMeasureMode : childCrossMeasureMode;
-
-        // Recursively call the layout algorithm for this child with the updated
-        // main size.
-        ABI26_0_0YGLayoutNodeInternal(currentRelativeChild,
-                             childWidth,
-                             childHeight,
-                             direction,
-                             childWidthMeasureMode,
-                             childHeightMeasureMode,
-                             availableInnerWidth,
-                             availableInnerHeight,
-                             performLayout && !requiresStretchLayout,
-                             "flex",
-                             config);
-        node->setLayoutHadOverflow(
-            node->getLayout().hadOverflow |
-            currentRelativeChild->getLayout().hadOverflow);
-        currentRelativeChild = currentRelativeChild->getNextChild();
-      }
+      ABI26_0_0YGResolveFlexibleLength(
+          node,
+          collectedFlexItemsValues,
+          mainAxis,
+          crossAxis,
+          mainAxisParentSize,
+          availableInnerMainDim,
+          availableInnerCrossDim,
+          availableInnerWidth,
+          availableInnerHeight,
+          flexBasisOverflows,
+          measureModeCrossDim,
+          performLayout,
+          config);
     }
 
-    remainingFreeSpace = originalRemainingFreeSpace + deltaFreeSpace;
     node->setLayoutHadOverflow(
-        node->getLayout().hadOverflow | (remainingFreeSpace < 0));
+        node->getLayout().hadOverflow |
+        (collectedFlexItemsValues.remainingFreeSpace < 0));
 
     // STEP 6: MAIN-AXIS JUSTIFICATION & CROSS-AXIS SIZE DETERMINATION
 
@@ -2510,159 +2596,49 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
     // that are aligned "stretch". We need to compute these stretch values and
     // set the final positions.
 
-    // If we are using "at most" rules in the main axis. Calculate the remaining space when
-    // constraint by the min size defined for the main axis.
-
-    if (measureModeMainDim == ABI26_0_0YGMeasureModeAtMost && remainingFreeSpace > 0) {
-      if (node->getStyle().minDimensions[dim[mainAxis]].unit !=
-              ABI26_0_0YGUnitUndefined &&
-          ABI26_0_0YGResolveValue(
-              node->getStyle().minDimensions[dim[mainAxis]],
-              mainAxisParentSize) >= 0) {
-        remainingFreeSpace = fmaxf(
-            0,
-            ABI26_0_0YGResolveValue(
-                node->getStyle().minDimensions[dim[mainAxis]],
-                mainAxisParentSize) -
-                (availableInnerMainDim - remainingFreeSpace));
-      } else {
-        remainingFreeSpace = 0;
-      }
-    }
-
-    int numberOfAutoMarginsOnCurrentLine = 0;
-    for (uint32_t i = startOfLineIndex; i < endOfLineIndex; i++) {
-      const ABI26_0_0YGNodeRef child = node->getChild(i);
-      if (child->getStyle().positionType == ABI26_0_0YGPositionTypeRelative) {
-        if (child->marginLeadingValue(mainAxis).unit == ABI26_0_0YGUnitAuto) {
-          numberOfAutoMarginsOnCurrentLine++;
-        }
-        if (child->marginTrailingValue(mainAxis).unit == ABI26_0_0YGUnitAuto) {
-          numberOfAutoMarginsOnCurrentLine++;
-        }
-      }
-    }
-
-    if (numberOfAutoMarginsOnCurrentLine == 0) {
-      switch (justifyContent) {
-        case ABI26_0_0YGJustifyCenter:
-          leadingMainDim = remainingFreeSpace / 2;
-          break;
-        case ABI26_0_0YGJustifyFlexEnd:
-          leadingMainDim = remainingFreeSpace;
-          break;
-        case ABI26_0_0YGJustifySpaceBetween:
-          if (itemsOnLine > 1) {
-            betweenMainDim = fmaxf(remainingFreeSpace, 0) / (itemsOnLine - 1);
-          } else {
-            betweenMainDim = 0;
-          }
-          break;
-        case ABI26_0_0YGJustifySpaceEvenly:
-          // Space is distributed evenly across all elements
-          betweenMainDim = remainingFreeSpace / (itemsOnLine + 1);
-          leadingMainDim = betweenMainDim;
-          break;
-        case ABI26_0_0YGJustifySpaceAround:
-          // Space on the edges is half of the space between elements
-          betweenMainDim = remainingFreeSpace / itemsOnLine;
-          leadingMainDim = betweenMainDim / 2;
-          break;
-        case ABI26_0_0YGJustifyFlexStart:
-          break;
-      }
-    }
-
-    float mainDim = leadingPaddingAndBorderMain + leadingMainDim;
-    float crossDim = 0;
-
-    for (uint32_t i = startOfLineIndex; i < endOfLineIndex; i++) {
-      const ABI26_0_0YGNodeRef child = node->getChild(i);
-      if (child->getStyle().display == ABI26_0_0YGDisplayNone) {
-        continue;
-      }
-      if (child->getStyle().positionType == ABI26_0_0YGPositionTypeAbsolute &&
-          ABI26_0_0YGNodeIsLeadingPosDefined(child, mainAxis)) {
-        if (performLayout) {
-          // In case the child is position absolute and has left/top being
-          // defined, we override the position to whatever the user said
-          // (and margin/border).
-          child->setLayoutPosition(
-              ABI26_0_0YGNodeLeadingPosition(child, mainAxis, availableInnerMainDim) +
-                  ABI26_0_0YGNodeLeadingBorder(node, mainAxis) +
-                  ABI26_0_0YGNodeLeadingMargin(child, mainAxis, availableInnerWidth),
-              pos[mainAxis]);
-        }
-      } else {
-        // Now that we placed the element, we need to update the variables.
-        // We need to do that only for relative elements. Absolute elements
-        // do not take part in that phase.
-        if (child->getStyle().positionType == ABI26_0_0YGPositionTypeRelative) {
-          if (child->marginLeadingValue(mainAxis).unit == ABI26_0_0YGUnitAuto) {
-            mainDim += remainingFreeSpace / numberOfAutoMarginsOnCurrentLine;
-          }
-
-          if (performLayout) {
-            child->setLayoutPosition(
-                child->getLayout().position[pos[mainAxis]] + mainDim,
-                pos[mainAxis]);
-          }
-
-          if (child->marginTrailingValue(mainAxis).unit == ABI26_0_0YGUnitAuto) {
-            mainDim += remainingFreeSpace / numberOfAutoMarginsOnCurrentLine;
-          }
-
-          if (canSkipFlex) {
-            // If we skipped the flex step, then we can't rely on the
-            // measuredDims because
-            // they weren't computed. This means we can't call ABI26_0_0YGNodeDimWithMargin.
-            mainDim += betweenMainDim +
-                ABI26_0_0YGNodeMarginForAxis(child, mainAxis, availableInnerWidth) +
-                child->getLayout().computedFlexBasis;
-            crossDim = availableInnerCrossDim;
-          } else {
-            // The main dimension is the sum of all the elements dimension plus the spacing.
-            mainDim += betweenMainDim + ABI26_0_0YGNodeDimWithMargin(child, mainAxis, availableInnerWidth);
-
-            // The cross dimension is the max of the elements dimension since
-            // there can only be one element in that cross dimension.
-            crossDim = fmaxf(crossDim, ABI26_0_0YGNodeDimWithMargin(child, crossAxis, availableInnerWidth));
-          }
-        } else if (performLayout) {
-          child->setLayoutPosition(
-              child->getLayout().position[pos[mainAxis]] +
-                  ABI26_0_0YGNodeLeadingBorder(node, mainAxis) + leadingMainDim,
-              pos[mainAxis]);
-        }
-      }
-    }
-
-    mainDim += trailingPaddingAndBorderMain;
+    ABI26_0_0YGJustifyMainAxis(
+        node,
+        collectedFlexItemsValues,
+        startOfLineIndex,
+        mainAxis,
+        crossAxis,
+        measureModeMainDim,
+        measureModeCrossDim,
+        mainAxisParentSize,
+        parentWidth,
+        availableInnerMainDim,
+        availableInnerCrossDim,
+        availableInnerWidth,
+        performLayout);
 
     float containerCrossAxis = availableInnerCrossDim;
     if (measureModeCrossDim == ABI26_0_0YGMeasureModeUndefined ||
         measureModeCrossDim == ABI26_0_0YGMeasureModeAtMost) {
       // Compute the cross axis from the max cross dimension of the children.
-      containerCrossAxis = ABI26_0_0YGNodeBoundAxis(node,
-                                           crossAxis,
-                                           crossDim + paddingAndBorderAxisCross,
-                                           crossAxisParentSize,
-                                           parentWidth) -
-                           paddingAndBorderAxisCross;
+      containerCrossAxis =
+          ABI26_0_0YGNodeBoundAxis(
+              node,
+              crossAxis,
+              collectedFlexItemsValues.crossDim + paddingAndBorderAxisCross,
+              crossAxisParentSize,
+              parentWidth) -
+          paddingAndBorderAxisCross;
     }
 
     // If there's no flex wrap, the cross dimension is defined by the container.
     if (!isNodeFlexWrap && measureModeCrossDim == ABI26_0_0YGMeasureModeExactly) {
-      crossDim = availableInnerCrossDim;
+      collectedFlexItemsValues.crossDim = availableInnerCrossDim;
     }
 
     // Clamp to the min/max size specified on the container.
-    crossDim = ABI26_0_0YGNodeBoundAxis(node,
-                               crossAxis,
-                               crossDim + paddingAndBorderAxisCross,
-                               crossAxisParentSize,
-                               parentWidth) -
-               paddingAndBorderAxisCross;
+    collectedFlexItemsValues.crossDim =
+        ABI26_0_0YGNodeBoundAxis(
+            node,
+            crossAxis,
+            collectedFlexItemsValues.crossDim + paddingAndBorderAxisCross,
+            crossAxisParentSize,
+            parentWidth) -
+        paddingAndBorderAxisCross;
 
     // STEP 7: CROSS-AXIS ALIGNMENT
     // We can skip child alignment if we're just measuring the container.
@@ -2674,24 +2650,23 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
         }
         if (child->getStyle().positionType == ABI26_0_0YGPositionTypeAbsolute) {
           // If the child is absolutely positioned and has a
-          // top/left/bottom/right
-          // set, override all the previously computed positions to set it
-          // correctly.
-          const bool isChildLeadingPosDefined = ABI26_0_0YGNodeIsLeadingPosDefined(child, crossAxis);
+          // top/left/bottom/right set, override
+          // all the previously computed positions to set it correctly.
+          const bool isChildLeadingPosDefined =
+              child->isLeadingPositionDefined(crossAxis);
           if (isChildLeadingPosDefined) {
             child->setLayoutPosition(
-                ABI26_0_0YGNodeLeadingPosition(
-                    child, crossAxis, availableInnerCrossDim) +
-                    ABI26_0_0YGNodeLeadingBorder(node, crossAxis) +
-                    ABI26_0_0YGNodeLeadingMargin(child, crossAxis, availableInnerWidth),
+                child->getLeadingPosition(crossAxis, availableInnerCrossDim) +
+                    node->getLeadingBorder(crossAxis) +
+                    child->getLeadingMargin(crossAxis, availableInnerWidth),
                 pos[crossAxis]);
           }
           // If leading position is not defined or calculations result in Nan, default to border + margin
           if (!isChildLeadingPosDefined ||
               ABI26_0_0YGFloatIsUndefined(child->getLayout().position[pos[crossAxis]])) {
             child->setLayoutPosition(
-                ABI26_0_0YGNodeLeadingBorder(node, crossAxis) +
-                    ABI26_0_0YGNodeLeadingMargin(child, crossAxis, availableInnerWidth),
+                node->getLeadingBorder(crossAxis) +
+                    child->getLeadingMargin(crossAxis, availableInnerWidth),
                 pos[crossAxis]);
           }
         } else {
@@ -2716,14 +2691,14 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
                   child->getLayout().measuredDimensions[dim[mainAxis]];
               float childCrossSize =
                   !ABI26_0_0YGFloatIsUndefined(child->getStyle().aspectRatio)
-                  ? ((ABI26_0_0YGNodeMarginForAxis(
-                          child, crossAxis, availableInnerWidth) +
+                  ? ((child->getMarginForAxis(crossAxis, availableInnerWidth) +
                       (isMainAxisRow
                            ? childMainSize / child->getStyle().aspectRatio
                            : childMainSize * child->getStyle().aspectRatio)))
-                  : crossDim;
+                  : collectedFlexItemsValues.crossDim;
 
-              childMainSize += ABI26_0_0YGNodeMarginForAxis(child, mainAxis, availableInnerWidth);
+              childMainSize +=
+                  child->getMarginForAxis(mainAxis, availableInnerWidth);
 
               ABI26_0_0YGMeasureMode childMainMeasureMode = ABI26_0_0YGMeasureModeExactly;
               ABI26_0_0YGMeasureMode childCrossMeasureMode = ABI26_0_0YGMeasureModeExactly;
@@ -2793,8 +2768,8 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
       }
     }
 
-    totalLineCrossDim += crossDim;
-    maxLineMainDim = fmaxf(maxLineMainDim, mainDim);
+    totalLineCrossDim += collectedFlexItemsValues.crossDim;
+    maxLineMainDim = fmaxf(maxLineMainDim, collectedFlexItemsValues.mainDim);
   }
 
   // STEP 8: MULTI-LINE CONTENT ALIGNMENT
@@ -2860,16 +2835,16 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
             lineHeight = fmaxf(
                 lineHeight,
                 child->getLayout().measuredDimensions[dim[crossAxis]] +
-                    ABI26_0_0YGNodeMarginForAxis(child, crossAxis, availableInnerWidth));
+                    child->getMarginForAxis(crossAxis, availableInnerWidth));
           }
           if (ABI26_0_0YGNodeAlignItem(node, child) == ABI26_0_0YGAlignBaseline) {
-            const float ascent =
-                ABI26_0_0YGBaseline(child) +
-                ABI26_0_0YGNodeLeadingMargin(child, ABI26_0_0YGFlexDirectionColumn, availableInnerWidth);
+            const float ascent = ABI26_0_0YGBaseline(child) +
+                child->getLeadingMargin(
+                    ABI26_0_0YGFlexDirectionColumn, availableInnerWidth);
             const float descent =
                 child->getLayout().measuredDimensions[ABI26_0_0YGDimensionHeight] +
-                ABI26_0_0YGNodeMarginForAxis(
-                    child, ABI26_0_0YGFlexDirectionColumn, availableInnerWidth) -
+                child->getMarginForAxis(
+                    ABI26_0_0YGFlexDirectionColumn, availableInnerWidth) -
                 ascent;
             maxAscentForCurrentLine = fmaxf(maxAscentForCurrentLine, ascent);
             maxDescentForCurrentLine = fmaxf(maxDescentForCurrentLine, descent);
@@ -2891,16 +2866,15 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
               case ABI26_0_0YGAlignFlexStart: {
                 child->setLayoutPosition(
                     currentLead +
-                        ABI26_0_0YGNodeLeadingMargin(
-                            child, crossAxis, availableInnerWidth),
+                        child->getLeadingMargin(crossAxis, availableInnerWidth),
                     pos[crossAxis]);
                 break;
               }
               case ABI26_0_0YGAlignFlexEnd: {
                 child->setLayoutPosition(
                     currentLead + lineHeight -
-                        ABI26_0_0YGNodeTrailingMargin(
-                            child, crossAxis, availableInnerWidth) -
+                        child->getTrailingMargin(
+                            crossAxis, availableInnerWidth) -
                         child->getLayout().measuredDimensions[dim[crossAxis]],
                     pos[crossAxis]);
                 break;
@@ -2917,8 +2891,7 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
               case ABI26_0_0YGAlignStretch: {
                 child->setLayoutPosition(
                     currentLead +
-                        ABI26_0_0YGNodeLeadingMargin(
-                            child, crossAxis, availableInnerWidth),
+                        child->getLeadingMargin(crossAxis, availableInnerWidth),
                     pos[crossAxis]);
 
                 // Remeasure child with the line height as it as been only measured with the
@@ -2927,15 +2900,14 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
                   const float childWidth = isMainAxisRow
                       ? (child->getLayout()
                              .measuredDimensions[ABI26_0_0YGDimensionWidth] +
-                         ABI26_0_0YGNodeMarginForAxis(
-                             child, mainAxis, availableInnerWidth))
+                         child->getMarginForAxis(mainAxis, availableInnerWidth))
                       : lineHeight;
 
                   const float childHeight = !isMainAxisRow
                       ? (child->getLayout()
                              .measuredDimensions[ABI26_0_0YGDimensionHeight] +
-                         ABI26_0_0YGNodeMarginForAxis(
-                             child, crossAxis, availableInnerWidth))
+                         child->getMarginForAxis(
+                             crossAxis, availableInnerWidth))
                       : lineHeight;
 
                   if (!(ABI26_0_0YGFloatsEqual(
@@ -2964,10 +2936,8 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
               case ABI26_0_0YGAlignBaseline: {
                 child->setLayoutPosition(
                     currentLead + maxAscentForCurrentLine - ABI26_0_0YGBaseline(child) +
-                        ABI26_0_0YGNodeLeadingPosition(
-                            child,
-                            ABI26_0_0YGFlexDirectionColumn,
-                            availableInnerCrossDim),
+                        child->getLeadingPosition(
+                            ABI26_0_0YGFlexDirectionColumn, availableInnerCrossDim),
                     ABI26_0_0YGEdgeTop);
 
                 break;
@@ -3077,16 +3047,18 @@ static void ABI26_0_0YGNodelayoutImpl(const ABI26_0_0YGNodeRef node,
 
   if (performLayout) {
     // STEP 10: SIZING AND POSITIONING ABSOLUTE CHILDREN
-    for (currentAbsoluteChild = firstAbsoluteChild;
-         currentAbsoluteChild != nullptr;
-         currentAbsoluteChild = currentAbsoluteChild->getNextChild()) {
-      ABI26_0_0YGNodeAbsoluteLayoutChild(node,
-                                currentAbsoluteChild,
-                                availableInnerWidth,
-                                isMainAxisRow ? measureModeMainDim : measureModeCrossDim,
-                                availableInnerHeight,
-                                direction,
-                                config);
+    for (auto child : node->getChildren()) {
+      if (child->getStyle().positionType != ABI26_0_0YGPositionTypeAbsolute) {
+        continue;
+      }
+      ABI26_0_0YGNodeAbsoluteLayoutChild(
+          node,
+          child,
+          availableInnerWidth,
+          isMainAxisRow ? measureModeMainDim : measureModeCrossDim,
+          availableInnerHeight,
+          direction,
+          config);
     }
 
     // STEP 11: SETTING TRAILING POSITIONS FOR CHILDREN
@@ -3305,8 +3277,10 @@ bool ABI26_0_0YGLayoutNodeInternal(const ABI26_0_0YGNodeRef node,
   // expensive to measure, so it's worth avoiding redundant measurements if at
   // all possible.
   if (node->getMeasure() != nullptr) {
-    const float marginAxisRow = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionRow, parentWidth);
-    const float marginAxisColumn = ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionColumn, parentWidth);
+    const float marginAxisRow =
+        node->getMarginForAxis(ABI26_0_0YGFlexDirectionRow, parentWidth);
+    const float marginAxisColumn =
+        node->getMarginForAxis(ABI26_0_0YGFlexDirectionColumn, parentWidth);
 
     // First, try to use the layout cache.
     if (ABI26_0_0YGNodeCanUseCachedMeasurement(widthMeasureMode,
@@ -3574,7 +3548,6 @@ void ABI26_0_0YGNodeCalculateLayout(const ABI26_0_0YGNodeRef node,
   // input
   // parameters don't change.
   gCurrentGenerationCount++;
-
   node->resolveDimension();
   float width = ABI26_0_0YGUndefined;
   ABI26_0_0YGMeasureMode widthMeasureMode = ABI26_0_0YGMeasureModeUndefined;
@@ -3582,7 +3555,7 @@ void ABI26_0_0YGNodeCalculateLayout(const ABI26_0_0YGNodeRef node,
     width =
         ABI26_0_0YGResolveValue(
             node->getResolvedDimension(dim[ABI26_0_0YGFlexDirectionRow]), parentWidth) +
-        ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionRow, parentWidth);
+        node->getMarginForAxis(ABI26_0_0YGFlexDirectionRow, parentWidth);
     widthMeasureMode = ABI26_0_0YGMeasureModeExactly;
   } else if (
       ABI26_0_0YGResolveValue(
@@ -3602,7 +3575,7 @@ void ABI26_0_0YGNodeCalculateLayout(const ABI26_0_0YGNodeRef node,
     height = ABI26_0_0YGResolveValue(
                  node->getResolvedDimension(dim[ABI26_0_0YGFlexDirectionColumn]),
                  parentHeight) +
-        ABI26_0_0YGNodeMarginForAxis(node, ABI26_0_0YGFlexDirectionColumn, parentWidth);
+        node->getMarginForAxis(ABI26_0_0YGFlexDirectionColumn, parentWidth);
     heightMeasureMode = ABI26_0_0YGMeasureModeExactly;
   } else if (
       ABI26_0_0YGResolveValue(
@@ -3628,12 +3601,8 @@ void ABI26_0_0YGNodeCalculateLayout(const ABI26_0_0YGNodeRef node,
           true,
           "initial",
           node->getConfig())) {
-    ABI26_0_0YGNodeSetPosition(
-        node,
-        node->getLayout().direction,
-        parentWidth,
-        parentHeight,
-        parentWidth);
+    node->setPosition(
+        node->getLayout().direction, parentWidth, parentHeight, parentWidth);
     ABI26_0_0YGRoundToPixelGrid(node, node->getConfig()->pointScaleFactor, 0.0f, 0.0f);
 
     if (gPrintTree) {
@@ -3643,6 +3612,61 @@ void ABI26_0_0YGNodeCalculateLayout(const ABI26_0_0YGNodeRef node,
               ABI26_0_0YGPrintOptionsLayout | ABI26_0_0YGPrintOptionsChildren |
               ABI26_0_0YGPrintOptionsStyle));
     }
+  }
+
+  // We want to get rid off `useLegacyStretchBehaviour` from ABI26_0_0YGConfig. But we
+  // aren't sure whether client's of yoga have gotten rid off this flag or not.
+  // So logging this in ABI26_0_0YGLayout would help to find out the call sites depending
+  // on this flag. This check would be removed once we are sure no one is
+  // dependent on this flag anymore. The flag
+  // `shouldDiffLayoutWithoutLegacyStretchBehaviour` in ABI26_0_0YGConfig will help to
+  // run experiments.
+  if (node->getConfig()->shouldDiffLayoutWithoutLegacyStretchBehaviour &&
+      node->didUseLegacyFlag()) {
+    const ABI26_0_0YGNodeRef originalNode = ABI26_0_0YGNodeDeepClone(node);
+    originalNode->resolveDimension();
+    // Recursively mark nodes as dirty
+    originalNode->markDirtyAndPropogateDownwards();
+    gCurrentGenerationCount++;
+    // Rerun the layout, and calculate the diff
+    originalNode->setAndPropogateUseLegacyFlag(false);
+    if (ABI26_0_0YGLayoutNodeInternal(
+            originalNode,
+            width,
+            height,
+            parentDirection,
+            widthMeasureMode,
+            heightMeasureMode,
+            parentWidth,
+            parentHeight,
+            true,
+            "initial",
+            originalNode->getConfig())) {
+      originalNode->setPosition(
+          originalNode->getLayout().direction,
+          parentWidth,
+          parentHeight,
+          parentWidth);
+      ABI26_0_0YGRoundToPixelGrid(
+          originalNode,
+          originalNode->getConfig()->pointScaleFactor,
+          0.0f,
+          0.0f);
+
+      // Set whether the two layouts are different or not.
+      node->setLayoutDoesLegacyFlagAffectsLayout(
+          !originalNode->isLayoutTreeEqualToNode(*node));
+
+      if (gPrintTree) {
+        ABI26_0_0YGNodePrint(
+            originalNode,
+            (ABI26_0_0YGPrintOptions)(
+                ABI26_0_0YGPrintOptionsLayout | ABI26_0_0YGPrintOptionsChildren |
+                ABI26_0_0YGPrintOptionsStyle));
+      }
+    }
+    ABI26_0_0YGConfigFreeRecursive(originalNode);
+    ABI26_0_0YGNodeFreeRecursive(originalNode);
   }
 }
 

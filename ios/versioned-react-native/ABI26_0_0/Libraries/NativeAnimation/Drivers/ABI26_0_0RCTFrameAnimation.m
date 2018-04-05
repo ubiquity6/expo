@@ -115,7 +115,7 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init)
     return;
   }
 
-  // Do a linear remap of the two frames to safegaurd against variable framerates
+  // Do a linear remap of the two frames to safeguard against variable framerates
   NSNumber *fromFrameValue = _frames[startIndex];
   NSNumber *toFrameValue = _frames[nextIndex];
   NSTimeInterval fromInterval = startIndex * ABI26_0_0RCTSingleFrameInterval;

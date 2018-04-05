@@ -58,7 +58,7 @@
 }
 
 // Convert one element to ABI26_0_0RNSVGBezierElement and save to array
-void ABI26_0_0GetBezierElements(void *info, const CGPathElement *element)
+void ReactABI26_0_0GetBezierElements(void *info, const CGPathElement *element)
 {
     NSMutableArray *bezierElements = (__bridge NSMutableArray *)info;
     if (element)
@@ -69,7 +69,7 @@ void ABI26_0_0GetBezierElements(void *info, const CGPathElement *element)
 + (NSArray *) elementsFromCGPath:(CGPathRef)path
 {
     NSMutableArray *elements = [NSMutableArray array];
-    CGPathApply(path, (__bridge void *)elements, ABI26_0_0GetBezierElements);
+    CGPathApply(path, (__bridge void *)elements, ReactABI26_0_0GetBezierElements);
     return elements;
 }
 

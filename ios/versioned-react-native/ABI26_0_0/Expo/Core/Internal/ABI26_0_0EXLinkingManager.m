@@ -2,6 +2,7 @@
 
 #import "ABI26_0_0EXLinkingManager.h"
 #import "ABI26_0_0EXScopedModuleRegistry.h"
+#import "ABI26_0_0EXUtil.h"
 
 #import <ReactABI26_0_0/ABI26_0_0RCTBridge.h>
 #import <ReactABI26_0_0/ABI26_0_0RCTEventDispatcher.h>
@@ -68,7 +69,10 @@ ABI26_0_0RCT_EXPORT_METHOD(openURL:(NSURL *)URL
     [_kernelLinkingDelegate linkingModule:self didOpenUrl:URL.absoluteString];
     resolve(@YES);
   } else {
-    BOOL opened = [ABI26_0_0RCTSharedApplication() openURL:URL];
+    __block BOOL opened = NO;
+    [ABI26_0_0EXUtil performSynchronouslyOnMainThread:^{
+      opened = [ABI26_0_0RCTSharedApplication() openURL:URL];
+    }];
     if (opened) {
       resolve(nil);
     } else {
@@ -81,9 +85,11 @@ ABI26_0_0RCT_EXPORT_METHOD(canOpenURL:(NSURL *)URL
                   resolve:(ABI26_0_0RCTPromiseResolveBlock)resolve
                   reject:(__unused ABI26_0_0RCTPromiseRejectBlock)reject)
 {
-  BOOL canOpen = [_kernelLinkingDelegate linkingModule:self shouldOpenExpoUrl:URL];
+  __block BOOL canOpen = [_kernelLinkingDelegate linkingModule:self shouldOpenExpoUrl:URL];
   if (!canOpen) {
-    canOpen = [ABI26_0_0RCTSharedApplication() canOpenURL:URL];
+    [ABI26_0_0EXUtil performSynchronouslyOnMainThread:^{
+      canOpen = [ABI26_0_0RCTSharedApplication() canOpenURL:URL];
+    }];
   }
   resolve(@(canOpen));
 }

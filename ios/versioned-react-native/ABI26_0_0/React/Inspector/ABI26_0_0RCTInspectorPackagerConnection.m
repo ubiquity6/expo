@@ -14,6 +14,9 @@
 
 const int RECONNECT_DELAY_MS = 2000;
 
+@implementation ABI26_0_0RCTBundleStatus
+@end
+
 @interface ABI26_0_0RCTInspectorPackagerConnection () <ABI26_0_0RCTSRWebSocketDelegate> {
   NSURL *_url;
   NSMutableDictionary<NSString *, ABI26_0_0RCTInspectorLocalConnection *> *_inspectorConnections;
@@ -21,6 +24,7 @@ const int RECONNECT_DELAY_MS = 2000;
   dispatch_queue_t _jsQueue;
   BOOL _closed;
   BOOL _suppressConnectionErrors;
+  ABI26_0_0RCTBundleStatusProvider _bundleStatusProvider;
 }
 @end
 
@@ -49,6 +53,11 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init)
     _jsQueue = dispatch_queue_create("com.facebook.ReactABI26_0_0.WebSocketExecutor", DISPATCH_QUEUE_SERIAL);
   }
   return self;
+}
+
+- (void)setBundleStatusProvider:(ABI26_0_0RCTBundleStatusProvider)bundleStatusProvider
+{
+  _bundleStatusProvider = bundleStatusProvider;
 }
 
 - (void)handleProxyMessage:(NSDictionary<NSString *, id> *)message
@@ -135,11 +144,23 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init)
 {
   NSArray<ABI26_0_0RCTInspectorPage *> *pages = [ABI26_0_0RCTInspector pages];
   NSMutableArray *array = [NSMutableArray arrayWithCapacity:pages.count];
+
+  ABI26_0_0RCTBundleStatusProvider statusProvider = _bundleStatusProvider;
+  ABI26_0_0RCTBundleStatus *bundleStatus = statusProvider == nil
+    ? nil
+    : statusProvider();
+
   for (ABI26_0_0RCTInspectorPage *page in pages) {
     NSDictionary *jsonPage = @{
       @"id": [@(page.id) stringValue],
       @"title": page.title,
       @"app": [[NSBundle mainBundle] bundleIdentifier],
+      @"isLastBundleDownloadSuccess": bundleStatus == nil
+        ? [NSNull null]
+        : @(bundleStatus.isLastBundleDownloadSuccess),
+      @"bundleUpdateTimestamp": bundleStatus == nil
+        ? [NSNull null]
+        : @((long)bundleStatus.bundleUpdateTimestamp * 1000),
     };
     [array addObject:jsonPage];
   }

@@ -6,8 +6,6 @@
 #import "ABI26_0_0EXDisabledDevMenu.h"
 #import "ABI26_0_0EXDisabledRedBox.h"
 #import "ABI26_0_0EXFileSystem.h"
-#import "ABI26_0_0EXFrameExceptionsManager.h"
-#import "ABI26_0_0EXKernelModule.h"
 #import "ABI26_0_0EXVersionManager.h"
 #import "ABI26_0_0EXStatusBarManager.h"
 #import "ABI26_0_0EXUnversioned.h"
@@ -18,6 +16,7 @@
 #import <ReactABI26_0_0/ABI26_0_0RCTBridge+Private.h>
 #import <ReactABI26_0_0/ABI26_0_0RCTDevMenu.h>
 #import <ReactABI26_0_0/ABI26_0_0RCTDevSettings.h>
+#import <ReactABI26_0_0/ABI26_0_0RCTExceptionsManager.h>
 #import <ReactABI26_0_0/ABI26_0_0RCTLog.h>
 #import <ReactABI26_0_0/ABI26_0_0RCTModuleData.h>
 #import <ReactABI26_0_0/ABI26_0_0RCTUtils.h>
@@ -285,9 +284,6 @@ void ABI26_0_0EXRegisterScopedModule(Class moduleClass, NSString *kernelServiceC
  *    ABI26_0_0EXKernel *kernel
  *    NSArray *supportedSdkVersions
  *    id exceptionsManagerDelegate
- *
- * Frame-only:
- *    ABI26_0_0EXFrame *frame
  */
 - (NSArray *)extraModulesWithParams:(NSDictionary *)params
 {
@@ -308,17 +304,13 @@ void ABI26_0_0EXRegisterScopedModule(Class moduleClass, NSString *kernelServiceC
   
   // add scoped modules
   [extraModules addObjectsFromArray:[self _newScopedModulesWithExperienceId:experienceId services:services params:params]];
-  
-  if (params[@"frame"]) {
-    [extraModules addObject:[[ABI26_0_0EXFrameExceptionsManager alloc] initWithDelegate:params[@"frame"]]];
+
+  id exceptionsManagerDelegate = params[@"exceptionsManagerDelegate"];
+  if (exceptionsManagerDelegate) {
+    ABI26_0_0RCTExceptionsManager *exceptionsManager = [[ABI26_0_0RCTExceptionsManager alloc] initWithDelegate:exceptionsManagerDelegate];
+    [extraModules addObject:exceptionsManager];
   } else {
-    id exceptionsManagerDelegate = params[@"exceptionsManagerDelegate"];
-    if (exceptionsManagerDelegate) {
-      ABI26_0_0RCTExceptionsManager *exceptionsManager = [[ABI26_0_0RCTExceptionsManager alloc] initWithDelegate:exceptionsManagerDelegate];
-      [extraModules addObject:exceptionsManager];
-    } else {
-      ABI26_0_0RCTLogWarn(@"No exceptions manager provided when building extra modules for bridge.");
-    }
+    ABI26_0_0RCTLogWarn(@"No exceptions manager provided when building extra modules for bridge.");
   }
   
   if (params[@"testEnvironment"]) {
@@ -329,12 +321,13 @@ void ABI26_0_0EXRegisterScopedModule(Class moduleClass, NSString *kernelServiceC
     }
   }
   
+  /** todo: ben
   if (params[@"kernel"]) {
-    ABI26_0_0EXKernelModule *kernel = [[ABI26_0_0EXKernelModule alloc] initWithExperienceId:experienceId
-                                                    kernelServiceDelegate:services[@"EXKernelModuleManager"]
+    ABI26_0_0EXHomeModule *homeModule = [[ABI26_0_0EXHomeModule alloc] initWithExperienceId:experienceId
+                                                    kernelServiceDelegate:services[@"EXHomeModuleManager"]
                                                                    params:params];
-    [extraModules addObject:kernel];
-  }
+    [extraModules addObject:homeModule];
+  } */
 
   if ([params[@"isStandardDevMenuAllowed"] boolValue] && isDeveloper) {
     [extraModules addObject:[[ABI26_0_0RCTDevMenu alloc] init]];

@@ -7,8 +7,8 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import <ReactABI26_0_0/ABI26_0_0RCTViewManager.h>
+#import "ABI26_0_0RCTBaseTextViewManager.h"
 
-@interface ABI26_0_0RCTBaseTextInputViewManager : ABI26_0_0RCTViewManager
+@interface ABI26_0_0RCTBaseTextInputViewManager : ABI26_0_0RCTBaseTextViewManager
 
 @end

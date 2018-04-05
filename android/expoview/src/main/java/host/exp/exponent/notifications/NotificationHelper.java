@@ -13,12 +13,23 @@ import android.support.v4.app.NotificationCompat;
 import android.text.format.DateUtils;
 
 import de.greenrobot.event.EventBus;
+import expolib_v1.okhttp3.Call;
+import expolib_v1.okhttp3.Callback;
+import expolib_v1.okhttp3.MediaType;
+import expolib_v1.okhttp3.Request;
+import expolib_v1.okhttp3.RequestBody;
+import expolib_v1.okhttp3.Response;
 import host.exp.exponent.Constants;
+import host.exp.exponent.kernel.ExponentUrls;
+import host.exp.exponent.network.ExponentNetwork;
+import host.exp.exponent.storage.ExponentSharedPreferences;
+import host.exp.exponent.utils.AsyncCondition;
 import host.exp.exponent.utils.JSONUtils;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -37,6 +48,12 @@ public class NotificationHelper {
 
   public interface Listener {
     void onSuccess(int id);
+
+    void onFailure(Exception e);
+  }
+
+  public interface TokenListener {
+    void onSuccess(String token);
 
     void onFailure(Exception e);
   }
@@ -80,6 +97,71 @@ public class NotificationHelper {
     }
 
     exponentManifest.loadIconBitmap(iconUrl, bitmapListener);
+  }
+
+  public static void getPushNotificationToken(
+      final String deviceId,
+      final String experienceId,
+      final ExponentNetwork exponentNetwork,
+      final ExponentSharedPreferences exponentSharedPreferences,
+      final TokenListener listener) {
+    AsyncCondition.wait("devicePushToken", new AsyncCondition.AsyncConditionListener() {
+      @Override
+      public boolean isReady() {
+        return exponentSharedPreferences.getString(Constants.FCM_ENABLED ? ExponentSharedPreferences.FCM_TOKEN_KEY : ExponentSharedPreferences.GCM_TOKEN_KEY) != null;
+      }
+
+      @Override
+      public void execute() {
+        String sharedPreferencesToken = exponentSharedPreferences.getString(Constants.FCM_ENABLED ? ExponentSharedPreferences.FCM_TOKEN_KEY : ExponentSharedPreferences.GCM_TOKEN_KEY);
+        if (sharedPreferencesToken == null || sharedPreferencesToken.length() == 0) {
+          listener.onFailure(new Exception("No device token found"));
+          return;
+        }
+
+        JSONObject params = new JSONObject();
+        try {
+          params.put("deviceId", deviceId);
+          params.put("experienceId", experienceId);
+          params.put("appId", exponentSharedPreferences.getContext().getApplicationContext().getPackageName());
+          params.put("deviceToken", sharedPreferencesToken);
+          params.put("type", Constants.FCM_ENABLED ? "fcm" : "gcm");
+          params.put("development", false);
+        } catch (JSONException e) {
+          listener.onFailure(new Exception("Error constructing request"));
+          return;
+        }
+
+        RequestBody body = RequestBody.create(MediaType.parse("application/json; charset=utf-8"), params.toString());
+        Request request = ExponentUrls.addExponentHeadersToUrl("https://exp.host/--/api/v2/push/getExpoPushToken", false, true)
+            .header("Content-Type", "application/json")
+            .post(body)
+            .build();
+
+        exponentNetwork.getClient().call(request, new Callback() {
+          @Override
+          public void onFailure(Call call, IOException e) {
+            listener.onFailure(e);
+          }
+
+          @Override
+          public void onResponse(Call call, Response response) throws IOException {
+            if (!response.isSuccessful()) {
+              listener.onFailure(new Exception("Couldn't get android push token for device"));
+              return;
+            }
+
+            try {
+              JSONObject result = new JSONObject(response.body().string());
+              JSONObject data = result.getJSONObject("data");
+              listener.onSuccess(data.getString("expoPushToken"));
+            } catch (Exception e) {
+              listener.onFailure(e);
+            }
+          }
+        });
+      }
+    });
   }
 
   public static void showNotification(

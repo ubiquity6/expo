@@ -7,18 +7,12 @@
  * of patent rights can be found in the PATENTS file in the same directory.
  */
 
-#import <UIKit/UIKit.h>
-
-#import <ReactABI26_0_0/ABI26_0_0RCTComponent.h>
-#import <ReactABI26_0_0/ABI26_0_0RCTView.h>
-
 #import "ABI26_0_0RCTBaseTextInputView.h"
 
-@class ABI26_0_0RCTUITextField;
+NS_ASSUME_NONNULL_BEGIN
 
 @interface ABI26_0_0RCTSinglelineTextInputView : ABI26_0_0RCTBaseTextInputView
 
-@property (nonatomic, assign) BOOL caretHidden;
-@property (nonatomic, strong) NSNumber *maxLength;
-
 @end
+
+NS_ASSUME_NONNULL_END

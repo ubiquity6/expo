@@ -96,16 +96,6 @@ ABI26_0_0RCT_EXPORT_MODULE()
   ];
 }
 
-- (ABI26_0_0RCTViewManagerUIBlock)uiBlockToAmendWithShadowView:(__unused ABI26_0_0RCTShadowView *)shadowView
-{
-  return nil;
-}
-
-- (ABI26_0_0RCTViewManagerUIBlock)uiBlockToAmendWithShadowViewRegistry:(__unused NSDictionary<NSNumber *, ABI26_0_0RCTShadowView *> *)shadowViewRegistry
-{
-  return nil;
-}
-
 #pragma mark - View properties
 
 #if TARGET_OS_TV
@@ -123,6 +113,7 @@ ABI26_0_0RCT_REMAP_VIEW_PROPERTY(accessibilityActions, ReactABI26_0_0Accessibili
 ABI26_0_0RCT_REMAP_VIEW_PROPERTY(accessibilityLabel, ReactABI26_0_0AccessibilityElement.accessibilityLabel, NSString)
 ABI26_0_0RCT_REMAP_VIEW_PROPERTY(accessibilityTraits, ReactABI26_0_0AccessibilityElement.accessibilityTraits, UIAccessibilityTraits)
 ABI26_0_0RCT_REMAP_VIEW_PROPERTY(accessibilityViewIsModal, ReactABI26_0_0AccessibilityElement.accessibilityViewIsModal, BOOL)
+ABI26_0_0RCT_REMAP_VIEW_PROPERTY(accessibilityElementsHidden, ReactABI26_0_0AccessibilityElement.accessibilityElementsHidden, BOOL)
 ABI26_0_0RCT_REMAP_VIEW_PROPERTY(onAccessibilityAction, ReactABI26_0_0AccessibilityElement.onAccessibilityAction, ABI26_0_0RCTDirectEventBlock)
 ABI26_0_0RCT_REMAP_VIEW_PROPERTY(onAccessibilityTap, ReactABI26_0_0AccessibilityElement.onAccessibilityTap, ABI26_0_0RCTDirectEventBlock)
 ABI26_0_0RCT_REMAP_VIEW_PROPERTY(onMagicTap, ReactABI26_0_0AccessibilityElement.onMagicTap, ABI26_0_0RCTDirectEventBlock)

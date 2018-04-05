@@ -496,7 +496,6 @@ static NSDictionary *deviceOrientationEventBody(UIDeviceOrientation orientation)
     UIUserInterfaceLayoutDirection layoutDirection;
     BOOL isNew;
     BOOL parentIsNew;
-    BOOL isHidden;
   } ABI26_0_0RCTFrameData;
 
   // Construct arrays then hand off to main thread
@@ -513,28 +512,16 @@ static NSDictionary *deviceOrientationEventBody(UIDeviceOrientation orientation)
         shadowView.layoutDirection,
         shadowView.isNewView,
         shadowView.superview.isNewView,
-        shadowView.isHidden,
       };
     }
   }
 
-  // These are blocks to be executed on each view, immediately after
-  // ReactABI26_0_0SetFrame: has been called. Note that if ReactABI26_0_0SetFrame: is not called,
-  // these won't be called either, so this is not a suitable place to update
-  // properties that aren't related to layout.
-  NSMutableDictionary<NSNumber *, ABI26_0_0RCTViewManagerUIBlock> *updateBlocks =
-  [NSMutableDictionary new];
   for (ABI26_0_0RCTShadowView *shadowView in viewsWithNewFrames) {
 
     // We have to do this after we build the parentsAreNew array.
     shadowView.newView = NO;
 
     NSNumber *ReactABI26_0_0Tag = shadowView.ReactABI26_0_0Tag;
-    ABI26_0_0RCTViewManager *manager = [_componentDataByName[shadowView.viewName] manager];
-    ABI26_0_0RCTViewManagerUIBlock block = [manager uiBlockToAmendWithShadowView:shadowView];
-    if (block) {
-      updateBlocks[ReactABI26_0_0Tag] = block;
-    }
 
     if (shadowView.onLayout) {
       CGRect frame = shadowView.frame;
@@ -548,7 +535,10 @@ static NSDictionary *deviceOrientationEventBody(UIDeviceOrientation orientation)
       });
     }
 
-    if (ABI26_0_0RCTIsReactABI26_0_0RootView(ReactABI26_0_0Tag)) {
+    if (
+        ABI26_0_0RCTIsReactABI26_0_0RootView(ReactABI26_0_0Tag) &&
+        [shadowView isKindOfClass:[ABI26_0_0RCTRootShadowView class]]
+    ) {
       CGSize contentSize = shadowView.frame.size;
 
       ABI26_0_0RCTExecuteOnMainQueue(^{
@@ -578,7 +568,6 @@ static NSDictionary *deviceOrientationEventBody(UIDeviceOrientation orientation)
       UIView *view = viewRegistry[ReactABI26_0_0Tag];
       CGRect frame = frameData.frame;
 
-      BOOL isHidden = frameData.isHidden;
       UIUserInterfaceLayoutDirection layoutDirection = frameData.layoutDirection;
       BOOL isNew = frameData.isNew;
       ABI26_0_0RCTLayoutAnimation *updatingLayoutAnimation = isNew ? nil : layoutAnimationGroup.updatingLayoutAnimation;
@@ -596,15 +585,10 @@ static NSDictionary *deviceOrientationEventBody(UIDeviceOrientation orientation)
         }
       };
 
-      if (view.isHidden != isHidden) {
-        view.hidden = isHidden;
-      }
-
       if (view.ReactABI26_0_0LayoutDirection != layoutDirection) {
         view.ReactABI26_0_0LayoutDirection = layoutDirection;
       }
 
-      ABI26_0_0RCTViewManagerUIBlock updateBlock = updateBlocks[ReactABI26_0_0Tag];
       if (creatingLayoutAnimation) {
 
         // Animate view creation
@@ -629,9 +613,6 @@ static NSDictionary *deviceOrientationEventBody(UIDeviceOrientation orientation)
           } else if ([property isEqualToString:@"opacity"]) {
             view.layer.opacity = finalOpacity;
           }
-          if (updateBlock) {
-            updateBlock(self, viewRegistry);
-          }
         } withCompletionBlock:completion];
 
       } else if (updatingLayoutAnimation) {
@@ -639,18 +620,12 @@ static NSDictionary *deviceOrientationEventBody(UIDeviceOrientation orientation)
         // Animate view update
         [updatingLayoutAnimation performAnimations:^{
           [view ReactABI26_0_0SetFrame:frame];
-          if (updateBlock) {
-            updateBlock(self, viewRegistry);
-          }
         } withCompletionBlock:completion];
 
       } else {
 
         // Update without animation
         [view ReactABI26_0_0SetFrame:frame];
-        if (updateBlock) {
-          updateBlock(self, viewRegistry);
-        }
         completion(YES);
       }
     }
@@ -658,20 +633,6 @@ static NSDictionary *deviceOrientationEventBody(UIDeviceOrientation orientation)
     // Clean up
     uiManager->_layoutAnimationGroup = nil;
   };
-}
-
-- (void)_amendPendingUIBlocksWithStylePropagationUpdateForShadowView:(ABI26_0_0RCTShadowView *)topView
-{
-  NSMutableSet<ABI26_0_0RCTApplierBlock> *applierBlocks = [NSMutableSet setWithCapacity:1];
-  [topView collectUpdatedProperties:applierBlocks parentProperties:@{}];
-
-  if (applierBlocks.count) {
-    [self addUIBlock:^(__unused ABI26_0_0RCTUIManager *uiManager, NSDictionary<NSNumber *, UIView *> *viewRegistry) {
-      for (ABI26_0_0RCTApplierBlock block in applierBlocks) {
-        block(viewRegistry);
-      }
-    }];
-  }
 }
 
 /**
@@ -774,7 +735,7 @@ ABI26_0_0RCT_EXPORT_METHOD(removeSubviewsFromContainerWithID:(nonnull NSNumber *
     NSUInteger originalIndex = [originalSuperview.subviews indexOfObjectIdenticalTo:removedChild];
     [container removeReactABI26_0_0Subview:removedChild];
     // Disable user interaction while the view is animating
-    // since the view is (conseptually) deleted and not supposed to be interactive.
+    // since the view is (conceptually) deleted and not supposed to be interactive.
     removedChild.userInteractionEnabled = NO;
     [originalSuperview insertSubview:removedChild atIndex:originalIndex];
 
@@ -1075,13 +1036,6 @@ ABI26_0_0RCT_EXPORT_METHOD(dispatchViewManagerCommand:(nonnull NSNumber *)ReactA
  */
 - (void)_layoutAndMount
 {
-  // Gather blocks to be executed now that all view hierarchy manipulations have
-  // been completed (note that these may still take place before layout has finished)
-  for (ABI26_0_0RCTComponentData *componentData in _componentDataByName.allValues) {
-    ABI26_0_0RCTViewManagerUIBlock uiBlock = [componentData uiBlockToAmendWithShadowViewRegistry:_shadowViewRegistry];
-    [self addUIBlock:uiBlock];
-  }
-
   [self _dispatchPropsDidChangeEvents];
   [self _dispatchChildrenDidChangeEvents];
 
@@ -1094,12 +1048,6 @@ ABI26_0_0RCT_EXPORT_METHOD(dispatchViewManagerCommand:(nonnull NSNumber *)ReactA
   }
 
   [_observerCoordinator uiManagerDidPerformLayout:self];
-
-  // Properies propagation
-  for (NSNumber *ReactABI26_0_0Tag in _rootViewTags) {
-    ABI26_0_0RCTRootShadowView *rootView = (ABI26_0_0RCTRootShadowView *)_shadowViewRegistry[ReactABI26_0_0Tag];
-    [self _amendPendingUIBlocksWithStylePropagationUpdateForShadowView:rootView];
-  }
 
   [_observerCoordinator uiManagerWillPerformMounting:self];
 
@@ -1147,7 +1095,7 @@ ABI26_0_0RCT_EXPORT_METHOD(dispatchViewManagerCommand:(nonnull NSNumber *)ReactA
 - (void)setNeedsLayout
 {
   // If there is an active batch layout will happen when batch finished, so we will wait for that.
-  // Otherwise we immidiately trigger layout.
+  // Otherwise we immediately trigger layout.
   if (![_bridge isBatchActive] && ![_bridge isLoading]) {
     [self _layoutAndMount];
   }

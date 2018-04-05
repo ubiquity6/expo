@@ -37,9 +37,6 @@ static NSString *const ABI26_0_0RCTMapViewKey = @"MapView";
 @end
 
 @implementation ABI26_0_0AIRMapManager
-{
-    BOOL didCallOnMapReady;
-}
   
 ABI26_0_0RCT_EXPORT_MODULE()
 
@@ -714,13 +711,10 @@ static int kDragCenterContext;
 
 - (void)mapViewWillStartRenderingMap:(ABI26_0_0AIRMap *)mapView
 {
-    if (!didCallOnMapReady)
-    {
-      didCallOnMapReady = YES;
-      mapView.onMapReady(@{});
+    if (!mapView.hasStartedRendering) {
+      mapView.onMapReady(@{}); 
+      mapView.hasStartedRendering = YES;
     }
-  
-    mapView.hasStartedRendering = YES;
     [mapView beginLoading];
     [self _emitRegionChangeEvent:mapView continuous:NO];
 }

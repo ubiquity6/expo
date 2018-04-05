@@ -40,7 +40,7 @@
 
   <!-- ADD TEST PERMISSIONS HERE -->
 
-  <uses-feature android:glEsVersion="0x00030000" android:required="false" />
+  <uses-feature android:glEsVersion="0x00020000" android:required="false" />
 
   <application
     android:name=".MainApplication"
@@ -261,9 +261,11 @@
       </intent-filter>
     </service>
     <service
-      android:name=".gcm.RegistrationIntentService"
+      android:name=".gcm.GcmRegistrationIntentService"
       android:exported="false">
     </service>
+
+    <!-- ADD FCM CONFIG HERE -->
 
     <!-- ImagePicker native module -->
     <activity

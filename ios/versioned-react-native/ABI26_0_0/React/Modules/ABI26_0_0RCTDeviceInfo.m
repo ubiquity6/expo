@@ -12,6 +12,7 @@
 #import "ABI26_0_0RCTAccessibilityManager.h"
 #import "ABI26_0_0RCTAssert.h"
 #import "ABI26_0_0RCTEventDispatcher.h"
+#import "ABI26_0_0RCTUIUtils.h"
 #import "ABI26_0_0RCTUtils.h"
 
 @implementation ABI26_0_0RCTDeviceInfo {
@@ -72,18 +73,18 @@ static NSDictionary *ABI26_0_0RCTExportedDimensions(ABI26_0_0RCTBridge *bridge)
 {
   ABI26_0_0RCTAssertMainQueue();
 
-  // Don't use ABI26_0_0RCTScreenSize since it the interface orientation doesn't apply to it
-  CGRect screenSize = [[UIScreen mainScreen] bounds];
-  NSDictionary *dims = @{
-                         @"width": @(screenSize.size.width),
-                         @"height": @(screenSize.size.height),
-                         @"scale": @(ABI26_0_0RCTScreenScale()),
-                         @"fontScale": @(bridge.accessibilityManager.multiplier)
-                         };
+  ABI26_0_0RCTDimensions dimensions = ABI26_0_0RCTGetDimensions(bridge.accessibilityManager.multiplier);
+  typeof (dimensions.window) window = dimensions.window; // Window and Screen are considered equal for iOS.
+  NSDictionary<NSString *, NSNumber *> *dims = @{
+      @"width": @(window.width),
+      @"height": @(window.height),
+      @"scale": @(window.scale),
+      @"fontScale": @(window.fontScale)
+  };
   return @{
-           @"window": dims,
-           @"screen": dims
-           };
+      @"window": dims,
+      @"screen": dims
+  };
 }
 
 - (void)dealloc

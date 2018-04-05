@@ -2,17 +2,16 @@
 
 #import "EXKernelAppRegistry.h"
 #import "EXKernelAppLoader.h"
+#import "EXReactAppManager.h"
 #import "EXKernel.h"
-#import "EXFrame.h"
-#import "EXFrameReactAppManager.h"
-#import "EXKernelReactAppManager.h"
+#import "EXShellManager.h"
 
 #import <React/RCTBridge.h>
 
 @interface EXKernelAppRegistry ()
 
 @property (nonatomic, strong) NSMutableDictionary *appRegistry;
-@property (nonatomic, assign) EXKernelReactAppManager *kernelAppManager;
+@property (nonatomic, strong) EXKernelAppRecord *homeAppRecord;
 
 @end
 
@@ -26,13 +25,18 @@
   return self;
 }
 
-- (NSString *)registerAppWithManifestUrl:(NSURL *)manifestUrl
+- (NSString *)registerAppWithManifestUrl:(NSURL *)manifestUrl initialProps:(NSDictionary *)initialProps
 {
   NSAssert(manifestUrl, @"Cannot register an app with no manifest URL");
   // not enforcing uniqueness yet - we will do this once we download the manifest & have the experienceId
-  EXKernelAppRecord *newRecord = [EXKernelAppRecord recordWithManifestUrl:manifestUrl];
+  EXKernelAppRecord *newRecord = [[EXKernelAppRecord alloc] initWithManifestUrl:manifestUrl initialProps:initialProps];
   NSString *recordId = [[NSUUID UUID] UUIDString];
   [_appRegistry setObject:newRecord forKey:recordId];
+  
+  if (_delegate) {
+    [_delegate appRegistry:self didRegisterAppRecord:newRecord];
+  }
+  
   return recordId;
 }
 
@@ -43,74 +47,38 @@
     if (_delegate) {
       [_delegate appRegistry:self willUnregisterAppRecord:record];
     }
+    [record.appManager invalidate];
     [_appRegistry removeObjectForKey:recordId];
   }
 }
 
-- (void)_addAppManager:(EXFrameReactAppManager *)appManager toRecord:(EXKernelAppRecord *)appRecord
+- (void)registerHomeAppRecord:(EXKernelAppRecord *)homeRecord
 {
-  appRecord.appManager = appManager;
-
-  // TODO: this assumes we always load apps in the foreground (true at time of writing)
-  _lastKnownForegroundAppManager = appManager;
-
-  if (_delegate) {
-    [_delegate appRegistry:self didRegisterAppRecord:appRecord];
-  }
+  _homeAppRecord = homeRecord;
 }
 
-- (void)addAppManager:(EXFrameReactAppManager *)appManager toRecordWithId:(NSString *)recordId
+- (void)unregisterHomeAppRecord
 {
-  EXKernelAppRecord *appRecord = [self recordForId:recordId];
-  [self _addAppManager:appManager toRecord:appRecord];
+  _homeAppRecord = nil;
 }
 
-- (void)addAppManager:(EXFrameReactAppManager *)appManager toRecordWithExperienceId:(NSString *)experienceId
+- (EXKernelAppRecord *)homeAppRecord
 {
-  EXKernelAppRecord *appRecord = [self newestRecordWithExperienceId:experienceId];
-  [self _addAppManager:appManager toRecord:appRecord];
+  return _homeAppRecord;
 }
 
-- (void)unregisterRecordWithExperienceId:(NSString *)experienceId
+- (EXKernelAppRecord *)standaloneAppRecord
 {
-  for (NSString *recordId in self.appEnumerator) {
-    EXKernelAppRecord *record = [self recordForId:recordId];
-    if (record && record.experienceId != nil && [record.experienceId isEqualToString:experienceId]) {
-      [self unregisterAppWithRecordId:recordId];
-      break;
+  if ([EXShellManager sharedInstance].isShell) {
+    for (NSString *recordId in self.appEnumerator) {
+      EXKernelAppRecord *record = [self recordForId:recordId];
+      if (record.appLoader.manifestUrl
+          && [record.appLoader.manifestUrl.absoluteString isEqualToString:[EXShellManager sharedInstance].shellManifestUrl]) {
+        return record;
+      }
     }
   }
-}
-
-- (void)setExperienceFinishedLoading:(BOOL)experienceFinishedLoading onRecordWithId:(NSString *)recordId
-{
-  EXKernelAppRecord *record = [self recordForId:recordId];
-  if (record) {
-    record.experienceFinishedLoading = experienceFinishedLoading;
-  }
-}
-
-- (void)setExperienceFinishedLoading:(BOOL)experienceFinishedLoading onRecordWithExperienceId:(NSString *)experienceId
-{
-  EXKernelAppRecord *record = [self newestRecordWithExperienceId:experienceId];
-  if (record) {
-    record.experienceFinishedLoading = experienceFinishedLoading;
-  }
-}
-
-- (void)registerKernelAppManager:(EXKernelReactAppManager *)appManager
-{
-  _kernelAppManager = appManager;
-}
-
-- (void)unregisterKernelAppManager
-{
-  _kernelAppManager = nil;
-}
-
-- (EXKernelReactAppManager *)kernelAppManager
-{
-  return _kernelAppManager;
+  return nil;
 }
 
 - (EXKernelAppRecord *)recordForId:(NSString *)recordId
@@ -138,14 +106,6 @@
 {
   // TODO: use mutexes to control access to _appRegistry rather than just copying it here
   return [(NSDictionary *)[_appRegistry copy] keyEnumerator];
-}
-
-- (EXReactAppManager *)lastKnownForegroundAppManager
-{
-  if (_lastKnownForegroundAppManager) {
-    return _lastKnownForegroundAppManager;
-  }
-  return _kernelAppManager;
 }
 
 - (NSString *)description

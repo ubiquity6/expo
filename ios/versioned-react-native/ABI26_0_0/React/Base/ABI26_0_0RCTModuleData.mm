@@ -330,46 +330,6 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)init);
   return constants;
 }
 
-// TODO 10487027: this method can go once ABI26_0_0RCTBatchedBridge is gone
-- (NSArray *)config
-{
-  NSDictionary<NSString *, id> *constants = [self exportedConstants];
-  if (constants.count == 0 && self.methods.count == 0) {
-    return (id)kCFNull; // Nothing to export
-  }
-
-  ABI26_0_0RCT_PROFILE_BEGIN_EVENT(ABI26_0_0RCTProfileTagAlways, ([NSString stringWithFormat:@"[ABI26_0_0RCTModuleData config] %@", _moduleClass]), nil);
-  NSMutableArray<NSString *> *methods = self.methods.count ? [NSMutableArray new] : nil;
-  NSMutableArray<NSNumber *> *promiseMethods = nil;
-  NSMutableArray<NSNumber *> *syncMethods = nil;
-
-  for (id<ABI26_0_0RCTBridgeMethod> method in self.methods) {
-    if (method.functionType == ABI26_0_0RCTFunctionTypePromise) {
-      if (!promiseMethods) {
-        promiseMethods = [NSMutableArray new];
-      }
-      [promiseMethods addObject:@(methods.count)];
-    }
-    else if (method.functionType == ABI26_0_0RCTFunctionTypeSync) {
-      if (!syncMethods) {
-        syncMethods = [NSMutableArray new];
-      }
-      [syncMethods addObject:@(methods.count)];
-    }
-    [methods addObject:@(method.JSMethodName)];
-  }
-
-  NSArray *config = @[
-    self.name,
-    ABI26_0_0RCTNullIfNil(constants),
-    ABI26_0_0RCTNullIfNil(methods),
-    ABI26_0_0RCTNullIfNil(promiseMethods),
-    ABI26_0_0RCTNullIfNil(syncMethods)
-  ];
-  ABI26_0_0RCT_PROFILE_END_EVENT(ABI26_0_0RCTProfileTagAlways, ([NSString stringWithFormat:@"[ABI26_0_0RCTModuleData config] %@", _moduleClass]));
-  return config;
-}
-
 - (dispatch_queue_t)methodQueue
 {
   (void)[self instance];

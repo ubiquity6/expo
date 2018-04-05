@@ -17,9 +17,6 @@
 #import "ABI26_0_0RCTUIManager.h"
 #import "UIView+ReactABI26_0_0.h"
 
-@interface ABI26_0_0RCTRootContentView () <UIGestureRecognizerDelegate>
-@end
-
 @implementation ABI26_0_0RCTRootContentView
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -32,7 +29,6 @@
     self.ReactABI26_0_0Tag = ReactABI26_0_0Tag;
     _sizeFlexibility = sizeFlexibility;
     _touchHandler = [[ABI26_0_0RCTTouchHandler alloc] initWithBridge:_bridge];
-    _touchHandler.delegate = self;
     [_touchHandler attachToView:self];
     [_bridge.uiManager registerRootView:self];
   }
@@ -109,21 +105,6 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(-(instancetype)initWithCoder:(nonnull NSCoder *)aDe
                       args:@[self.ReactABI26_0_0Tag]
                 completion:NULL];
   }
-}
-
-#pragma mark - UIGestureRecognizerDelegate
-
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
-{
-  if (![gestureRecognizer isKindOfClass:[ABI26_0_0RCTTouchHandler class]]) {
-    return YES;
-  }
-
-  UIView *currentView = touch.view;
-  while (currentView && ![currentView isReactABI26_0_0RootView]) {
-    currentView = currentView.superview;
-  }
-  return currentView == self;
 }
 
 @end

@@ -30,7 +30,7 @@ ABI26_0_0RCT_EXTERN id ABI26_0_0RCTJSONClean(id object);
 ABI26_0_0RCT_EXTERN NSString *ABI26_0_0RCTMD5Hash(NSString *string);
 
 // Check if we are currently on the main queue (not to be confused with
-// the main thread, which is not neccesarily the same thing)
+// the main thread, which is not necessarily the same thing)
 // https://twitter.com/olebegemann/status/738656134731599872
 ABI26_0_0RCT_EXTERN BOOL ABI26_0_0RCTIsMainQueue(void);
 

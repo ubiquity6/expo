@@ -11,7 +11,7 @@
 
 #define ABI26_0_0RCT_REACT_NATIVE_VERSION @{ \
   @"major": @(0), \
-  @"minor": @(53), \
-  @"patch": @(0), \
+  @"minor": @(54), \
+  @"patch": @(2), \
   @"prerelease": [NSNull null], \
 }

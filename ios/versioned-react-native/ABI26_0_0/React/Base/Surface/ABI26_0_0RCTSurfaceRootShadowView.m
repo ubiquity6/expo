@@ -43,17 +43,17 @@
   }
 }
 
-- (void)calculateLayoutWithMinimumSize:(CGSize)minimumSize maximumSize:(CGSize)maximimSize
+- (void)calculateLayoutWithMinimumSize:(CGSize)minimumSize maximumSize:(CGSize)maximumSize
 {
   ABI26_0_0YGNodeRef yogaNode = self.yogaNode;
 
-  ABI26_0_0YGNodeStyleSetMinWidth(yogaNode, ABI26_0_0RCTYogaFloatFromCoreGraphicsFloat(maximimSize.width));
-  ABI26_0_0YGNodeStyleSetMinHeight(yogaNode, ABI26_0_0RCTYogaFloatFromCoreGraphicsFloat(maximimSize.height));
+  ABI26_0_0YGNodeStyleSetMinWidth(yogaNode, ABI26_0_0RCTYogaFloatFromCoreGraphicsFloat(minimumSize.width));
+  ABI26_0_0YGNodeStyleSetMinHeight(yogaNode, ABI26_0_0RCTYogaFloatFromCoreGraphicsFloat(minimumSize.height));
 
   ABI26_0_0YGNodeCalculateLayout(
     self.yogaNode,
-    ABI26_0_0RCTYogaFloatFromCoreGraphicsFloat(maximimSize.width),
-    ABI26_0_0RCTYogaFloatFromCoreGraphicsFloat(maximimSize.height),
+    ABI26_0_0RCTYogaFloatFromCoreGraphicsFloat(maximumSize.width),
+    ABI26_0_0RCTYogaFloatFromCoreGraphicsFloat(maximumSize.height),
     _baseDirection
   );
 }

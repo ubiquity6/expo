@@ -39,6 +39,8 @@
   NSMutableArray<NSMutableDictionary *> *_ReactABI26_0_0Touches;
   NSMutableArray<UIView *> *_touchViews;
 
+  __weak UIView *_cachedRootView;
+
   uint16_t _coalescingKey;
 }
 
@@ -150,7 +152,8 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithTarget:(id)target action:(S
 {
   UITouch *nativeTouch = _nativeTouches[touchIndex];
   CGPoint windowLocation = [nativeTouch locationInView:nativeTouch.window];
-  CGPoint rootViewLocation = [nativeTouch.window convertPoint:windowLocation toView:self.view];
+  ABI26_0_0RCTAssert(_cachedRootView, @"We were unable to find a root view for the touch");
+  CGPoint rootViewLocation = [nativeTouch.window convertPoint:windowLocation toView:_cachedRootView];
 
   UIView *touchView = _touchViews[touchIndex];
   CGPoint touchViewLocation = [nativeTouch.window convertPoint:windowLocation toView:touchView];
@@ -231,6 +234,26 @@ ABI26_0_0RCT_NOT_IMPLEMENTED(- (instancetype)initWithTarget:(id)target action:(S
   [_eventDispatcher sendEvent:event];
 }
 
+/***
+ * To ensure compatibilty when using UIManager.measure and ABI26_0_0RCTTouchHandler, we have to adopt
+ * UIManager.measure's behavior in finding a "root view".
+ * Usually ABI26_0_0RCTTouchHandler is already attached to a root view but in some cases (e.g. Modal),
+ * we are instead attached to some ABI26_0_0RCTView subtree. This is also the case when embedding some RN
+ * views inside a seperate ViewController not controlled by RN.
+ * This logic will either find the nearest rootView, or go all the way to the UIWindow.
+ * While this is not optimal, it is exactly what UIManager.measure does, and what Touchable.js
+ * relies on.
+ * We cache it here so that we don't have to repeat it for every touch in the gesture.
+ */
+- (void)_cacheRootView
+{
+  UIView *rootView = self.view;
+  while (rootView.superview && ![rootView isReactABI26_0_0RootView]) {
+    rootView = rootView.superview;
+  }
+  _cachedRootView = rootView;
+}
+
 #pragma mark - Gesture Recognizer Delegate Callbacks
 
 static BOOL ABI26_0_0RCTAllTouchesAreCancelledOrEnded(NSSet<UITouch *> *touches)
@@ -261,6 +284,8 @@ static BOOL ABI26_0_0RCTAnyTouchesChanged(NSSet<UITouch *> *touches)
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
 {
   [super touchesBegan:touches withEvent:event];
+
+  [self _cacheRootView];
 
   // "start" has to record new touches *before* extracting the event.
   // "end"/"cancel" needs to remove the touch *after* extracting the event.
@@ -333,6 +358,8 @@ static BOOL ABI26_0_0RCTAnyTouchesChanged(NSSet<UITouch *> *touches)
     [_nativeTouches removeAllObjects];
     [_ReactABI26_0_0Touches removeAllObjects];
     [_touchViews removeAllObjects];
+
+    _cachedRootView = nil;
   }
 }
 

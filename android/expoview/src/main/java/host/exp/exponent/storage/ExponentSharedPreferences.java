@@ -45,6 +45,7 @@ public class ExponentSharedPreferences {
   public static final String HAS_SAVED_SHORTCUT_KEY = "has_saved_shortcut";
   public static final String UUID_KEY = "uuid";
   public static final String GCM_TOKEN_KEY = "gcm_token";
+  public static final String FCM_TOKEN_KEY = "fcm_token";
   public static final String REFERRER_KEY = "referrer";
   public static final String NUX_HAS_FINISHED_FIRST_RUN_KEY = "nux_has_finished_first_run";
   public static final String SHOULD_NOT_USE_KERNEL_CACHE = "should_not_use_kernel_cache";
@@ -69,10 +70,16 @@ public class ExponentSharedPreferences {
   }
 
   private SharedPreferences mSharedPreferences;
+  private Context mContext;
 
   @Inject
   public ExponentSharedPreferences(Context context) {
     mSharedPreferences = context.getSharedPreferences(context.getString(R.string.preference_file_key), Context.MODE_PRIVATE);
+    mContext = context;
+  }
+
+  public Context getContext() {
+    return mContext;
   }
 
   public boolean getBoolean(String key) {

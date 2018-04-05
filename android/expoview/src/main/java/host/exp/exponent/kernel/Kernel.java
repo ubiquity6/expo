@@ -170,6 +170,10 @@ public class Kernel extends KernelInterface {
 
   // Don't call this until a loading screen is up, since it has to do some work on the main thread.
   public void startJSKernel() {
+    if (Constants.isShellApp()) {
+      return;
+    }
+
     SoLoader.init(mContext, false);
 
     synchronized (this) {
@@ -241,6 +245,9 @@ public class Kernel extends KernelInterface {
   }
 
   public void reloadJSBundle() {
+    if (Constants.isShellApp()) {
+      return;
+    }
     String bundleUrl = getBundleUrl();
     mHasError = false;
     Exponent.getInstance().loadJSBundle(null, bundleUrl, KernelConstants.KERNEL_BUNDLE_ID, RNObject.UNVERSIONED, kernelBundleListener(), true);
@@ -447,7 +454,15 @@ public class Kernel extends KernelInterface {
       }
     }
 
-    Intent intent = new Intent(mActivityContext, ShellAppActivity.class);
+    Class clazz = ShellAppActivity.class;
+    try {
+      if (Constants.isDetached()) {
+        clazz = Class.forName("host.exp.exponent.MainActivity");
+      }
+    } catch (Exception e) {
+      EXL.e(TAG, "Cannot find MainActivity, falling back to ShellAppActivity");
+    }
+    Intent intent = new Intent(mActivityContext, clazz);
     Kernel.addIntentDocumentFlags(intent);
 
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
@@ -648,6 +663,17 @@ public class Kernel extends KernelInterface {
       }
 
       @Override
+      public void emitEvent(JSONObject params) {
+        ExperienceActivityTask task = sManifestUrlToExperienceActivityTask.get(manifestUrl);
+        if (task != null) {
+          ExperienceActivity experienceActivity = task.experienceActivity.get();
+          if (experienceActivity != null) {
+            experienceActivity.emitUpdatesEvent(params);
+          }
+        }
+      }
+
+      @Override
       public void onError(Exception e) {
         handleError(e);
       }
@@ -685,16 +711,15 @@ public class Kernel extends KernelInterface {
     WritableMap params = Arguments.createMap();
     params.putString("manifestUrl", manifestUrl);
     params.putString("manifestString", manifest.toString());
-    params.putString("bundleUrl", bundleUrl);
-    ExponentKernelModuleProvider.queueEvent("ExponentKernel.openManifestUrl", params, new ExponentKernelModuleProvider.KernelEventCallback() {
+    ExponentKernelModuleProvider.queueEvent("ExponentKernel.addHistoryItem", params, new ExponentKernelModuleProvider.KernelEventCallback() {
       @Override
       public void onEventSuccess(ReadableMap result) {
-        EXL.d(TAG, "Successfully called ExponentKernel.openManifestUrl in kernel JS.");
+        EXL.d(TAG, "Successfully called ExponentKernel.addHistoryItem in kernel JS.");
       }
 
       @Override
       public void onEventFailure(String errorMessage) {
-        EXL.e(TAG, "Error calling ExponentKernel.openManifestUrl in kernel JS: " + errorMessage);
+        EXL.e(TAG, "Error calling ExponentKernel.addHistoryItem in kernel JS: " + errorMessage);
       }
     });
 
@@ -702,6 +727,28 @@ public class Kernel extends KernelInterface {
   }
 
   // Called from DevServerHelper via ReactNativeStaticHelpers
+  @DoNotStrip
+  public static String getBundleUrlForActivityId(final int activityId, String host,
+                                                 String mainModuleId, String bundleTypeId,
+                                                 boolean devMode, boolean jsMinify) {
+    // NOTE: This current implementation doesn't look at the bundleTypeId (see RN's private
+    // BundleType enum for the possible values) but may need to
+
+    if (activityId == -1) {
+      // This is the kernel
+      return sInstance.getBundleUrl();
+    }
+
+    for (ExperienceActivityTask task : sManifestUrlToExperienceActivityTask.values()) {
+      if (task.activityId == activityId) {
+        return task.bundleUrl;
+      }
+    }
+
+    return null;
+  }
+
+  // <= SDK 25
   @DoNotStrip
   public static String getBundleUrlForActivityId(final int activityId, String host, String jsModulePath, boolean devMode, boolean jsMinify) {
     if (activityId == -1) {

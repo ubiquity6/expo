@@ -26,6 +26,11 @@ ABI26_0_0RCT_EXPORT_MODULE(ExponentGLViewManager);
   return self;
 }
 
++ (BOOL)requiresMainQueueSetup
+{
+  return NO;
+}
+
 - (UIView *)view
 {
   return [[ABI26_0_0EXGLView alloc] initWithManager:self];

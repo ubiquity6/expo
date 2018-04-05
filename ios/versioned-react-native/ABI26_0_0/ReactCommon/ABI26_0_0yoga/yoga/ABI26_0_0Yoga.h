@@ -56,6 +56,7 @@ typedef ABI26_0_0YGSize (*ABI26_0_0YGMeasureFunc)(ABI26_0_0YGNodeRef node,
                                 float height,
                                 ABI26_0_0YGMeasureMode heightMode);
 typedef float (*ABI26_0_0YGBaselineFunc)(ABI26_0_0YGNodeRef node, const float width, const float height);
+typedef void (*ABI26_0_0YGDirtiedFunc)(ABI26_0_0YGNodeRef node);
 typedef void (*ABI26_0_0YGPrintFunc)(ABI26_0_0YGNodeRef node);
 typedef int (*ABI26_0_0YGLogger)(const ABI26_0_0YGConfigRef config,
                         const ABI26_0_0YGNodeRef node,
@@ -97,6 +98,10 @@ WIN_EXPORT void ABI26_0_0YGNodeCalculateLayout(const ABI26_0_0YGNodeRef node,
 // depends on information not known to ABI26_0_0YG they must perform this dirty
 // marking manually.
 WIN_EXPORT void ABI26_0_0YGNodeMarkDirty(const ABI26_0_0YGNodeRef node);
+
+// This function marks the current node and all its descendants as dirty. This function is added to test yoga benchmarks.
+// This function is not expected to be used in production as calling `ABI26_0_0YGCalculateLayout` will cause the recalculation of each and every node.
+WIN_EXPORT void ABI26_0_0YGNodeMarkDirtyAndPropogateToDescendants(const ABI26_0_0YGNodeRef node);
 
 WIN_EXPORT void ABI26_0_0YGNodePrint(const ABI26_0_0YGNodeRef node, const ABI26_0_0YGPrintOptions options);
 
@@ -165,6 +170,8 @@ ABI26_0_0YGMeasureFunc ABI26_0_0YGNodeGetMeasureFunc(ABI26_0_0YGNodeRef node);
 void ABI26_0_0YGNodeSetMeasureFunc(ABI26_0_0YGNodeRef node, ABI26_0_0YGMeasureFunc measureFunc);
 ABI26_0_0YGBaselineFunc ABI26_0_0YGNodeGetBaselineFunc(ABI26_0_0YGNodeRef node);
 void ABI26_0_0YGNodeSetBaselineFunc(ABI26_0_0YGNodeRef node, ABI26_0_0YGBaselineFunc baselineFunc);
+ABI26_0_0YGDirtiedFunc ABI26_0_0YGNodeGetDirtiedFunc(ABI26_0_0YGNodeRef node);
+void ABI26_0_0YGNodeSetDirtiedFunc(ABI26_0_0YGNodeRef node, ABI26_0_0YGDirtiedFunc dirtiedFunc);
 ABI26_0_0YGPrintFunc ABI26_0_0YGNodeGetPrintFunc(ABI26_0_0YGNodeRef node);
 void ABI26_0_0YGNodeSetPrintFunc(ABI26_0_0YGNodeRef node, ABI26_0_0YGPrintFunc printFunc);
 bool ABI26_0_0YGNodeGetHasNewLayout(ABI26_0_0YGNodeRef node);
@@ -172,6 +179,7 @@ void ABI26_0_0YGNodeSetHasNewLayout(ABI26_0_0YGNodeRef node, bool hasNewLayout);
 ABI26_0_0YGNodeType ABI26_0_0YGNodeGetNodeType(ABI26_0_0YGNodeRef node);
 void ABI26_0_0YGNodeSetNodeType(ABI26_0_0YGNodeRef node, ABI26_0_0YGNodeType nodeType);
 bool ABI26_0_0YGNodeIsDirty(ABI26_0_0YGNodeRef node);
+bool ABI26_0_0YGNodeLayoutGetDidUseLegacyFlag(const ABI26_0_0YGNodeRef node);
 
 ABI26_0_0YG_NODE_STYLE_PROPERTY(ABI26_0_0YGDirection, Direction, direction);
 ABI26_0_0YG_NODE_STYLE_PROPERTY(ABI26_0_0YGFlexDirection, FlexDirection, flexDirection);

@@ -84,7 +84,6 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @property (atomic, assign, readonly) CGSize maximumSize;
 
-
 /**
  * Simple shortcut to `-[ABI26_0_0RCTSurface setMinimumSize:size maximumSize:size]`.
  */
@@ -109,8 +108,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 /**
  * Synchronously blocks the current thread up to given `timeout` until
- * the Surface will not have given `stage`.
- * Do nothing, if called from the main or `UIManager` queue.
+ * the Surface reaches `stage`.
+ * Limitations:
+ *  - Do nothing, if called on `UIManager` queue.
+ *  - Calling on the main queue with `ABI26_0_0RCTSurfaceStageSurfaceDidInitialMounting`
+ *    stage temporary is not supported; in this case the stage will be
+ *    downgraded to `ABI26_0_0RCTSurfaceStageSurfaceDidInitialLayout`.
  */
 - (BOOL)synchronouslyWaitForStage:(ABI26_0_0RCTSurfaceStage)stage timeout:(NSTimeInterval)timeout;
 

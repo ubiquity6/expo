@@ -264,8 +264,6 @@ typedef void(^ABI26_0_0RCTDevMenuAlertActionHandler)(UIAlertAction *action);
   }
 
   if (devSettings.isJSCSamplingProfilerAvailable) {
-    // Note: bridge.jsContext is not implemented in the old bridge, so this code is
-    // duplicated in ABI26_0_0RCTJSCExecutor
     [items addObject:[ABI26_0_0RCTDevMenuItem buttonItemWithTitle:@"Start / Stop JS Sampling Profiler" handler:^{
       [devSettings toggleJSCSamplingProfiler];
     }]];

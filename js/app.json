@@ -4,31 +4,23 @@
     "description": "",
     "slug": "home",
     "privacy": "unlisted",
-    "sdkVersion": "16.0.0",
-    "version": "16.0.0",
+    "sdkVersion": "26.0.0",
+    "version": "26.1.0",
     "orientation": "portrait",
+    "platforms": ["ios", "android"],
     "primaryColor": "#cccccc",
     "icon": "https://s3.amazonaws.com/exp-brand-assets/ExponentEmptyManifest_192.png",
-    "notification": {
-      "icon": "https://s3.amazonaws.com/exp-us-standard/placeholder-push-icon-blue-circle.png",
-      "color": "#000000"
-    },
-    "loading": {
-      "icon": "https://s3.amazonaws.com/exp-brand-assets/ExponentEmptyManifest_192.png",
-      "hideExponentText": false
-    },
-    "packagerOpts": {
-      "assetExts": [
-        "ttf"
-      ],
+    "updates": {
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "host.exp.exponent"
-    },
+        "supportsTablet": true,
+        "bundleIdentifier": "host.exp.exponent"
+      },
     "android": {
-      "package": "host.exp.exponent"
-    },
+        "package": "host.exp.exponent"
+      },
     "scheme": "exp"
   }
 }

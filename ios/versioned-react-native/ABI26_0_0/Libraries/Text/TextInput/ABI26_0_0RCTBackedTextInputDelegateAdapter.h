@@ -12,11 +12,13 @@
 #import "ABI26_0_0RCTBackedTextInputViewProtocol.h"
 #import "ABI26_0_0RCTBackedTextInputDelegate.h"
 
+NS_ASSUME_NONNULL_BEGIN
+
 #pragma mark - ABI26_0_0RCTBackedTextFieldDelegateAdapter (for UITextField)
 
 @interface ABI26_0_0RCTBackedTextFieldDelegateAdapter : NSObject
 
-- (instancetype)initWithTextField:(UITextField<ABI26_0_0RCTBackedTextInputViewProtocol> *)backedTextInput;
+- (instancetype)initWithTextField:(UITextField<ABI26_0_0RCTBackedTextInputViewProtocol> *)backedTextInputView;
 
 - (void)skipNextTextInputDidChangeSelectionEventWithTextRange:(UITextRange *)textRange;
 - (void)selectedTextRangeWasSet;
@@ -27,8 +29,10 @@
 
 @interface ABI26_0_0RCTBackedTextViewDelegateAdapter : NSObject
 
-- (instancetype)initWithTextView:(UITextView<ABI26_0_0RCTBackedTextInputViewProtocol> *)backedTextInput;
+- (instancetype)initWithTextView:(UITextView<ABI26_0_0RCTBackedTextInputViewProtocol> *)backedTextInputView;
 
 - (void)skipNextTextInputDidChangeSelectionEventWithTextRange:(UITextRange *)textRange;
 
 @end
+
+NS_ASSUME_NONNULL_END

@@ -659,7 +659,8 @@ ABI26_0_0RCT_ENUM_CONVERTER(ABI26_0_0YGJustify, (@{
   @"flex-end": @(ABI26_0_0YGJustifyFlexEnd),
   @"center": @(ABI26_0_0YGJustifyCenter),
   @"space-between": @(ABI26_0_0YGJustifySpaceBetween),
-  @"space-around": @(ABI26_0_0YGJustifySpaceAround)
+  @"space-around": @(ABI26_0_0YGJustifySpaceAround),
+  @"space-evenly": @(ABI26_0_0YGJustifySpaceEvenly)
 }), ABI26_0_0YGJustifyFlexStart, intValue)
 
 ABI26_0_0RCT_ENUM_CONVERTER(ABI26_0_0YGAlign, (@{

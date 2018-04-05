@@ -26,6 +26,7 @@ import abi26_0_0.host.exp.exponent.modules.api.BrightnessModule;
 import abi26_0_0.host.exp.exponent.modules.api.ImageManipulatorModule;
 import abi26_0_0.host.exp.exponent.modules.api.MailComposerModule;
 import abi26_0_0.host.exp.exponent.modules.api.PrintModule;
+import abi26_0_0.host.exp.exponent.modules.api.UpdatesModule;
 import abi26_0_0.host.exp.exponent.modules.api.av.video.VideoManager;
 import abi26_0_0.host.exp.exponent.modules.api.components.barcodescanner.BarCodeScannerModule;
 import abi26_0_0.host.exp.exponent.modules.api.components.barcodescanner.BarCodeScannerViewManager;
@@ -62,7 +63,6 @@ import abi26_0_0.host.exp.exponent.modules.api.SegmentModule;
 import abi26_0_0.host.exp.exponent.modules.api.ShakeModule;
 import abi26_0_0.host.exp.exponent.modules.api.SpeechModule;
 import abi26_0_0.host.exp.exponent.modules.api.URLHandlerModule;
-import abi26_0_0.host.exp.exponent.modules.api.UtilModule;
 import abi26_0_0.host.exp.exponent.modules.api.WebBrowserModule;
 import abi26_0_0.host.exp.exponent.modules.api.av.AVModule;
 import abi26_0_0.host.exp.exponent.modules.api.av.video.VideoViewManager;
@@ -93,6 +93,8 @@ import abi26_0_0.host.exp.exponent.modules.internal.ExponentUnsignedAsyncStorage
 import abi26_0_0.host.exp.exponent.modules.api.components.payments.StripeModule;
 import abi26_0_0.host.exp.exponent.modules.test.ExponentTestNativeModule;
 
+import static host.exp.exponent.kernel.KernelConstants.LINKING_URI_KEY;
+
 public class ExponentPackage implements ReactPackage {
 
   private static final String TAG = ExponentPackage.class.getSimpleName();
@@ -115,6 +117,7 @@ public class ExponentPackage implements ReactPackage {
 
   public static ExponentPackage kernelExponentPackage(JSONObject manifest) {
     Map<String, Object> kernelExperienceProperties = new HashMap<>();
+    kernelExperienceProperties.put(LINKING_URI_KEY, "exp://");
     return new ExponentPackage(true, kernelExperienceProperties, manifest);
   }
 
@@ -132,7 +135,7 @@ public class ExponentPackage implements ReactPackage {
         new ShakeModule(reactContext),
         new FontLoaderModule(reactContext),
         new KeyboardModule(reactContext),
-        new UtilModule(reactContext, mExperienceProperties),
+        new UpdatesModule(reactContext, mExperienceProperties, mManifest),
         new ExponentIntentModule(reactContext, mExperienceProperties)
     ));
 

@@ -435,6 +435,16 @@
 
 - (BOOL)synchronouslyWaitForStage:(ABI26_0_0RCTSurfaceStage)stage timeout:(NSTimeInterval)timeout
 {
+  if (ABI26_0_0RCTIsMainQueue() && (stage == ABI26_0_0RCTSurfaceStageSurfaceDidInitialRendering)) {
+    // This case *temporary* does not supported.
+    stage = ABI26_0_0RCTSurfaceStageSurfaceDidInitialLayout;
+  }
+
+  if (ABI26_0_0RCTIsUIManagerQueue()) {
+    ABI26_0_0RCTLogInfo(@"Synchronous waiting is not supported on UIManager queue.");
+    return NO;
+  }
+
   dispatch_semaphore_t semaphore;
   switch (stage) {
     case ABI26_0_0RCTSurfaceStageSurfaceDidInitialLayout:
@@ -447,24 +457,14 @@
       ABI26_0_0RCTAssert(NO, @"Only waiting for `ABI26_0_0RCTSurfaceStageSurfaceDidInitialRendering` and `ABI26_0_0RCTSurfaceStageSurfaceDidInitialLayout` stages is supported.");
   }
 
-  if (ABI26_0_0RCTIsMainQueue()) {
-    ABI26_0_0RCTLogInfo(@"Synchronous waiting is not supported on the main queue.");
-    return NO;
-  }
-
-  if (ABI26_0_0RCTIsUIManagerQueue()) {
-    ABI26_0_0RCTLogInfo(@"Synchronous waiting is not supported on UIManager queue.");
-    return NO;
-  }
-
-  BOOL timeoutOccured = dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, timeout * NSEC_PER_SEC));
-  if (!timeoutOccured) {
+  BOOL timeoutOccurred = dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, timeout * NSEC_PER_SEC));
+  if (!timeoutOccurred) {
     // Balancing the semaphore.
-    // Note: `dispatch_semaphore_wait` reverts the decrement in case when timeout occured.
+    // Note: `dispatch_semaphore_wait` reverts the decrement in case when timeout occurred.
     dispatch_semaphore_signal(semaphore);
   }
 
-  return !timeoutOccured;
+  return !timeoutOccurred;
 }
 
 #pragma mark - ABI26_0_0RCTSurfaceRootShadowViewDelegate

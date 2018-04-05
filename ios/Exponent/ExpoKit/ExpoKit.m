@@ -1,17 +1,17 @@
 // Copyright 2015-present 650 Industries. All rights reserved.
 
 #import "ExpoKit.h"
+#import "EXViewController.h"
 #import "EXAnalytics.h"
 #import "EXBuildConstants.h"
 #import "EXFacebook.h"
-#import "EXFatalHandler.h"
 #import "EXGoogleAuthManager.h"
 #import "EXKernel.h"
 #import "EXKernelUtil.h"
 #import "EXKernelLinkingManager.h"
+#import "EXReactAppExceptionHandler.h"
 #import "EXRemoteNotificationManager.h"
 #import "EXLocalNotificationManager.h"
-#import "EXViewController.h"
 #import "EXBranchManager.h"
 #import "EXShellManager.h"
 
@@ -29,6 +29,7 @@ NSString * const EXAppDidRegisterUserNotificationSettingsNotification = @"EXAppD
 }
 
 @property (nonatomic, nullable, strong) EXViewController *rootViewController;
+@property (nonatomic, strong) NSDictionary *launchOptions;
 
 @end
 
@@ -51,15 +52,6 @@ NSString * const EXAppDidRegisterUserNotificationSettingsNotification = @"EXAppD
   if (self = [super init]) {
     _rootViewControllerClass = [EXViewController class];
     _hasConsumedLaunchNotification = NO;
-    
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(_onKernelJSLoaded)
-                                                 name:kEXKernelJSIsLoadedNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(_onKernelAppDidDisplay)
-                                                 name:kEXKernelAppDidDisplay
-                                               object:nil];
     [self _initDefaultKeys];
   }
   return self;
@@ -79,23 +71,22 @@ NSString * const EXAppDidRegisterUserNotificationSettingsNotification = @"EXAppD
 - (EXViewController *)rootViewController
 {
   if (!_rootViewController) {
-    _rootViewController = [[_rootViewControllerClass alloc] initWithLaunchOptions:@{}];
+    _rootViewController = [[_rootViewControllerClass alloc] init];
+    _rootViewController.delegate = [EXKernel sharedInstance];
   }
   return _rootViewController;
 }
 
 #pragma mark - misc AppDelegate hooks
 
-- (void)setLaunchOptions:(NSDictionary *)launchOptions
-{
-  self.rootViewController.appManager.launchOptions = launchOptions;
-}
-
 - (void)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
-  
-  [DDLog addLogger:[DDASLLogger sharedInstance]];
-  [DDLog addLogger:[DDTTYLogger sharedInstance]];
+  if (@available(iOS 10, *)) {
+    [DDLog addLogger:[DDOSLogger sharedInstance]];
+  } else {
+    [DDLog addLogger:[DDASLLogger sharedInstance]];
+    [DDLog addLogger:[DDTTYLogger sharedInstance]];
+  }
 
   RCTSetFatalHandler(handleFatalReactError);
 
@@ -122,7 +113,7 @@ NSString * const EXAppDidRegisterUserNotificationSettingsNotification = @"EXAppD
   // then registering for a push token is a no-op
   [[EXKernel sharedInstance].serviceRegistry.remoteNotificationManager registerForRemoteNotifications];
   [[EXKernel sharedInstance].serviceRegistry.branchManager application:application didFinishLaunchingWithOptions:launchOptions];
-  [self setLaunchOptions:launchOptions];
+  _launchOptions = launchOptions;
 }
 
 #pragma mark - handling JS loads
@@ -147,14 +138,13 @@ NSString * const EXAppDidRegisterUserNotificationSettingsNotification = @"EXAppD
 {
   if (!_hasConsumedLaunchNotification) {
     _hasConsumedLaunchNotification = YES;
-    NSDictionary *launchOptions = self.rootViewController.launchOptions;
-    NSDictionary *remoteNotification = [launchOptions objectForKey:UIApplicationLaunchOptionsRemoteNotificationKey];
+    NSDictionary *remoteNotification = [_launchOptions objectForKey:UIApplicationLaunchOptionsRemoteNotificationKey];
     
     if (remoteNotification) {
       [[EXKernel sharedInstance].serviceRegistry.remoteNotificationManager handleRemoteNotification:remoteNotification fromBackground:YES];
     }
     
-    UILocalNotification *localNotification = [launchOptions objectForKey:UIApplicationLaunchOptionsLocalNotificationKey];
+    UILocalNotification *localNotification = [_launchOptions objectForKey:UIApplicationLaunchOptionsLocalNotificationKey];
     if (localNotification) {
       [[EXLocalNotificationManager sharedInstance] handleLocalNotification:localNotification fromBackground:YES];
     }
@@ -176,14 +166,14 @@ NSString * const EXAppDidRegisterUserNotificationSettingsNotification = @"EXAppD
 
 - (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)token
 {
-  [[EXKernel sharedInstance].serviceRegistry.remoteNotificationManager registerAPNSToken:token];
+  [[EXKernel sharedInstance].serviceRegistry.remoteNotificationManager registerAPNSToken:token registrationError:nil];
   [[NSNotificationCenter defaultCenter] postNotificationName:EXAppDidRegisterForRemoteNotificationsNotification object:nil];
 }
 
 - (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)err
 {
   DDLogWarn(@"Failed to register for remote notifs: %@", err);
-  [[EXKernel sharedInstance].serviceRegistry.remoteNotificationManager registerAPNSToken:nil];
+  [[EXKernel sharedInstance].serviceRegistry.remoteNotificationManager registerAPNSToken:nil registrationError:err];
 
   // Post this even in the failure case -- up to subscribers to subsequently read the system permission state
   [[NSNotificationCenter defaultCenter] postNotificationName:EXAppDidRegisterForRemoteNotificationsNotification object:nil];
@@ -232,7 +222,6 @@ NSString * const EXAppDidRegisterUserNotificationSettingsNotification = @"EXAppD
     return YES;
   }
 
-  // TODO: don't want to launch more bridges when in detached state.
   return [EXKernelLinkingManager application:application openURL:url sourceApplication:sourceApplication annotation:annotation];
 }
 
@@ -260,7 +249,6 @@ NSString * const EXAppDidRegisterUserNotificationSettingsNotification = @"EXAppD
       NSUInteger matchCount = [regex numberOfMatchesInString:path options:0 range:NSMakeRange(0, path.length)];
       
       if (matchCount > 0) {
-        // TODO: don't want to launch more bridges when in detached state.
         [EXKernelLinkingManager application:application continueUserActivity:userActivity restorationHandler:restorationHandler];
         return YES;
       } else {

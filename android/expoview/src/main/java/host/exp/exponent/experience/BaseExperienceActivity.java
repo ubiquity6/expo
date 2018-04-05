@@ -14,9 +14,13 @@ import com.google.android.gms.common.GoogleApiAvailability;
 import javax.inject.Inject;
 
 import de.greenrobot.event.EventBus;
+import host.exp.exponent.Constants;
 import host.exp.exponent.di.NativeModuleDepsProvider;
-import host.exp.exponent.gcm.RegistrationIntentService;
+import host.exp.exponent.fcm.FcmRegistrationIntentService;
+import host.exp.exponent.gcm.GcmRegistrationIntentService;
 import host.exp.exponent.kernel.ExperienceId;
+import host.exp.exponent.kernel.KernelConstants;
+import host.exp.exponent.utils.AsyncCondition;
 import host.exp.expoview.BuildConfig;
 import host.exp.expoview.Exponent;
 import host.exp.exponent.RNObject;
@@ -90,7 +94,17 @@ public abstract class BaseExperienceActivity extends MultipleVersionReactNativeA
     mIsInForeground = true;
 
     mOnResumeTime = System.currentTimeMillis();
-    EventBus.getDefault().post(new ExperienceForegroundedEvent(mExperienceId));
+    AsyncCondition.wait(KernelConstants.EXPERIENCE_ID_SET_FOR_ACTIVITY_KEY, new AsyncCondition.AsyncConditionListener() {
+      @Override
+      public boolean isReady() {
+        return mExperienceId != null || BaseExperienceActivity.this instanceof HomeActivity;
+      }
+
+      @Override
+      public void execute() {
+        EventBus.getDefault().post(new ExperienceForegroundedEvent(mExperienceId));
+      }
+    });
   }
 
   @Override
@@ -243,8 +257,10 @@ public abstract class BaseExperienceActivity extends MultipleVersionReactNativeA
   protected void registerForNotifications() {
     int googlePlayServicesCode = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(this);
     if (googlePlayServicesCode == ConnectionResult.SUCCESS) {
-      Intent intent = new Intent(this, RegistrationIntentService.class);
-      startService(intent);
+      if (!Constants.FCM_ENABLED) {
+        Intent intent = new Intent(this, Constants.FCM_ENABLED ? FcmRegistrationIntentService.class : GcmRegistrationIntentService.class);
+        startService(intent);
+      }
     } else if (!BuildConfig.DEBUG) {
       // TODO: should we actually show an error or fail silently?
       // GoogleApiAvailability.getInstance().getErrorDialog(this, googlePlayServicesCode, 0).show();

@@ -18,6 +18,8 @@
 @property (nonatomic, assign) MKCoordinateRegion initialRegion;
 @property (nonatomic, assign) MKCoordinateRegion region;
 @property (nonatomic, assign) NSString *customMapStyleString;
+@property (nonatomic, assign) UIEdgeInsets mapPadding;
+@property (nonatomic, copy) ABI26_0_0RCTBubblingEventBlock onMapReady;
 @property (nonatomic, copy) ABI26_0_0RCTBubblingEventBlock onPress;
 @property (nonatomic, copy) ABI26_0_0RCTBubblingEventBlock onLongPress;
 @property (nonatomic, copy) ABI26_0_0RCTBubblingEventBlock onMarkerPress;
@@ -39,8 +41,11 @@
 @property (nonatomic, assign) BOOL pitchEnabled;
 @property (nonatomic, assign) BOOL showsUserLocation;
 @property (nonatomic, assign) BOOL showsMyLocationButton;
+@property (nonatomic, assign) BOOL showsIndoorLevelPicker;
 
+- (void)didPrepareMap;
 - (BOOL)didTapMarker:(GMSMarker *)marker;
+- (void)didTapPolyline:(GMSPolyline *)polyline;
 - (void)didTapPolygon:(GMSPolygon *)polygon;
 - (void)didTapAtCoordinate:(CLLocationCoordinate2D)coordinate;
 - (void)didLongPressAtCoordinate:(CLLocationCoordinate2D)coordinate;

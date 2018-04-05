@@ -51,8 +51,6 @@ Pod::Spec.new do |s|
                               "React/Inspector/*",
                               "ReactCommon/ABI26_0_0yoga/*",
                               "React/Cxx*/*",
-                              "React/Base/ABI26_0_0RCTBatchedBridge.mm",
-                              "React/Executors/*"
     ss.ios.exclude_files    = "React/**/ABI26_0_0RCTTV*.*"
     ss.tvos.exclude_files   = "React/Modules/RCTClipboard*",
                               "React/Views/RCTDatePicker*",
@@ -77,12 +75,6 @@ Pod::Spec.new do |s|
     ss.source_files     = "Expo/Optional/**/*.{h,m}"
   end
 
-  s.subspec "BatchedBridge" do |ss|
-    ss.dependency             "ReactABI26_0_0/Core"
-    ss.dependency             "ReactABI26_0_0/cxxReactABI26_0_0_legacy"
-    ss.source_files         = "React/Base/ABI26_0_0RCTBatchedBridge.mm", "React/Executors/*"
-  end
-
   s.subspec "CxxBridge" do |ss|
     ss.dependency             "Folly", "2016.09.26.00"
     ss.dependency             "ReactABI26_0_0/Core"
@@ -102,27 +94,6 @@ Pod::Spec.new do |s|
   s.subspec "tvOS" do |ss|
     ss.dependency             "ReactABI26_0_0/Core"
     ss.source_files         = "React/**/RCTTV*.{h, m}"
-  end
-
-  s.subspec "ABI26_0_0jschelpers_legacy" do |ss|
-    ss.source_files         = "ReactCommon/ABI26_0_0jschelpers/ABI26_0_0{JavaScriptCore,JSCWrapper}.{cpp,h}", "ReactCommon/ABI26_0_0jschelpers/ABI26_0_0systemJSCWrapper.cpp"
-    ss.private_header_files = "ReactCommon/ABI26_0_0jschelpers/ABI26_0_0{JavaScriptCore,JSCWrapper}.h"
-    ss.pod_target_xcconfig  = { "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)/ReactCommon\"" }
-    ss.framework            = "JavaScriptCore"
-  end
-
-  s.subspec "ABI26_0_0jsinspector_legacy" do |ss|
-    ss.source_files         = "ReactCommon/ABI26_0_0jsinspector/ABI26_0_0{InspectorInterfaces}.{cpp,h}"
-    ss.private_header_files = "ReactCommon/ABI26_0_0jsinspector/ABI26_0_0{InspectorInterfaces}.h"
-    ss.pod_target_xcconfig  = { "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)/ReactCommon\"" }
-  end
-
-  s.subspec "cxxReactABI26_0_0_legacy" do |ss|
-    ss.dependency             "ReactABI26_0_0/ABI26_0_0jschelpers_legacy"
-    ss.dependency             "ReactABI26_0_0/ABI26_0_0jsinspector_legacy"
-    ss.source_files         = "ReactCommon/cxxReactABI26_0_0/ABI26_0_0{JSBundleType,oss-compat-util}.{cpp,h}"
-    ss.private_header_files = "ReactCommon/cxxReactABI26_0_0/ABI26_0_0{JSBundleType,oss-compat-util}.h"
-    ss.pod_target_xcconfig  = { "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)/ReactCommon\"" }
   end
 
   s.subspec "ABI26_0_0jschelpers" do |ss|
@@ -177,7 +148,7 @@ Pod::Spec.new do |s|
 
   s.subspec "RCTBlob" do |ss|
     ss.dependency             "ReactABI26_0_0/Core"
-    ss.source_files         = "Libraries/Blob/*.{h,m}"
+    ss.source_files         = "Libraries/Blob/*.{h,m,mm}"
     ss.preserve_paths       = "Libraries/Blob/*.js"
   end
 

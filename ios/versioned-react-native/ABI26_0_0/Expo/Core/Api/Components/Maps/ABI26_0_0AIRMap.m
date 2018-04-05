@@ -93,6 +93,14 @@ const NSInteger ABI26_0_0AIRMapMaxZoomLevel = 20;
     [_regionChangeObserveTimer invalidate];
 }
 
+-(void)addSubview:(UIView *)view {
+    if([view isKindOfClass:[ABI26_0_0AIRMapMarker class]]) {
+        [self addAnnotation:(id <MKAnnotation>)view];
+    } else {
+        [super addSubview:view];
+    }
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
 - (void)insertReactABI26_0_0Subview:(id<ABI26_0_0RCTComponent>)subview atIndex:(NSInteger)atIndex {
@@ -300,6 +308,38 @@ const NSInteger ABI26_0_0AIRMapMaxZoomLevel = 20;
 
 - (void)setLoadingIndicatorColor:(UIColor *)loadingIndicatorColor {
     self.activityIndicatorView.color = loadingIndicatorColor;
+}
+
+ABI26_0_0RCT_EXPORT_METHOD(pointForCoordinate:(NSDictionary *)coordinate resolver: (ABI26_0_0RCTPromiseResolveBlock)resolve
+                  rejecter:(ABI26_0_0RCTPromiseRejectBlock)reject)
+{
+  CGPoint touchPoint = [self convertCoordinate:
+                        CLLocationCoordinate2DMake(
+                                                   [coordinate[@"lat"] doubleValue],
+                                                   [coordinate[@"lng"] doubleValue]
+                                                   )
+                                 toPointToView:self];
+  
+  resolve(@{
+            @"x": @(touchPoint.x),
+            @"y": @(touchPoint.y),
+            });
+}
+
+ABI26_0_0RCT_EXPORT_METHOD(coordinateForPoint:(NSDictionary *)point resolver: (ABI26_0_0RCTPromiseResolveBlock)resolve
+                  rejecter:(ABI26_0_0RCTPromiseRejectBlock)reject)
+{
+  CLLocationCoordinate2D coordinate = [self convertPoint:
+                                       CGPointMake(
+                                                   [point[@"x"] doubleValue],
+                                                   [point[@"y"] doubleValue]
+                                                   )
+                                    toCoordinateFromView:self];
+  
+  resolve(@{
+            @"lat": @(coordinate.latitude),
+            @"lng": @(coordinate.longitude),
+            });
 }
 
 // Include properties of MKMapView which are only available on iOS 9+

@@ -29,6 +29,8 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
 
 @interface ABI26_0_0EXAV ()
 
+@property (nonatomic, weak) id kernelAudioSessionManagerDelegate;
+
 @property (nonatomic, assign) BOOL audioIsEnabled;
 @property (nonatomic, assign) ABI26_0_0EXAVAudioSessionMode currentAudioSessionMode;
 @property (nonatomic, assign) BOOL isBackgrounded;
@@ -55,9 +57,9 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
 
 @synthesize methodQueue = _methodQueue;
 
-- (instancetype)init
+- (instancetype)initWithExperienceId:(NSString *)experienceId kernelServiceDelegate:(id)kernelServiceInstance params:(NSDictionary *)params
 {
-  if ((self = [super init])) {
+  if ((self = [super initWithExperienceId:experienceId kernelServiceDelegate:kernelServiceInstance params:params])) {
     _audioIsEnabled = YES;
     _currentAudioSessionMode = ABI26_0_0EXAVAudioSessionModeInactive;
     _isBackgrounded = NO;
@@ -77,19 +79,10 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
     _audioRecorderIsPreparing = false;
     _audioRecorderShouldBeginRecording = false;
     _audioRecorderDurationMillis = 0;
-    
-    // These only need to be set once:
-    AVAudioSession *session = [AVAudioSession sharedInstance];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(_handleAudioSessionInterruption:)
-                                                 name:AVAudioSessionInterruptionNotification
-                                               object:session];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(_handleMediaServicesReset)
-                                                 name:AVAudioSessionMediaServicesWereResetNotification
-                                               object:session];
+
+    _kernelAudioSessionManagerDelegate = kernelServiceInstance;
+    [_kernelAudioSessionManagerDelegate scopedModuleDidForeground:self];
   }
-  
   return self;
 }
 
@@ -116,6 +109,7 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
 
 - (void)_bridgeDidForeground:(NSNotification *)notification
 {
+  [_kernelAudioSessionManagerDelegate scopedModuleDidForeground:self];
   _isBackgrounded = NO;
   
   [self _runBlockForAllAVObjects:^(NSObject<ABI26_0_0EXAVObject> *exAVObject) {
@@ -131,6 +125,7 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
   [self _runBlockForAllAVObjects:^(NSObject<ABI26_0_0EXAVObject> *exAVObject) {
     [exAVObject bridgeDidBackground:notification];
   }];
+  [_kernelAudioSessionManagerDelegate scopedModuleDidBackground:self];
 }
 
 #pragma mark - ABI26_0_0RCTEventEmitter
@@ -190,13 +185,13 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
     _allowsAudioRecording = allowsRecording;
     
     if (_currentAudioSessionMode != ABI26_0_0EXAVAudioSessionModeInactive) {
-      return [self _updateAudioSessionCategory:[AVAudioSession sharedInstance] forAudioSessionMode:[self _getAudioSessionModeRequired]];
+      return [self _updateAudioSessionCategoryForAudioSessionMode:[self _getAudioSessionModeRequired]];
     }
     return nil;
   }
 }
 
-- (NSError *)_updateAudioSessionCategory:(AVAudioSession *)audioSession forAudioSessionMode:(ABI26_0_0EXAVAudioSessionMode)audioSessionMode
+- (NSError *)_updateAudioSessionCategoryForAudioSessionMode:(ABI26_0_0EXAVAudioSessionMode)audioSessionMode
 {
   NSError *error;
   ABI26_0_0EXAudioInterruptionMode activeInterruptionMode = audioSessionMode == ABI26_0_0EXAVAudioSessionModeActiveMuted
@@ -205,22 +200,22 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
   if (!_playsInSilentMode) {
     // _allowsRecording is guaranteed to be false, and _interruptionMode is guaranteed to not be ABI26_0_0EXAudioInterruptionModeDuckOthers (see above)
     if (_audioInterruptionMode == ABI26_0_0EXAudioInterruptionModeDoNotMix) {
-      [audioSession setCategory:AVAudioSessionCategorySoloAmbient error:&error];
+      error = [_kernelAudioSessionManagerDelegate setCategory:AVAudioSessionCategorySoloAmbient withOptions:0 forScopedModule:self];
     } else {
-      [audioSession setCategory:AVAudioSessionCategoryAmbient error:&error];
+      error = [_kernelAudioSessionManagerDelegate setCategory:AVAudioSessionCategoryAmbient withOptions:0 forScopedModule:self];
     }
   } else {
     NSString *category = _allowsAudioRecording ? AVAudioSessionCategoryPlayAndRecord : AVAudioSessionCategoryPlayback;
     switch (activeInterruptionMode) {
       case ABI26_0_0EXAudioInterruptionModeDoNotMix:
-        [audioSession setCategory:category error:&error];
+        error = [_kernelAudioSessionManagerDelegate setCategory:category withOptions:0 forScopedModule:self];
         break;
       case ABI26_0_0EXAudioInterruptionModeDuckOthers:
-        [audioSession setCategory:category withOptions:AVAudioSessionCategoryOptionDuckOthers error:&error];
+        error = [_kernelAudioSessionManagerDelegate setCategory:category withOptions:AVAudioSessionCategoryOptionDuckOthers forScopedModule:self];
         break;
       case ABI26_0_0EXAudioInterruptionModeMixWithOthers:
       default:
-        [audioSession setCategory:category withOptions:AVAudioSessionCategoryOptionMixWithOthers error:&error];
+        error = [_kernelAudioSessionManagerDelegate setCategory:category withOptions:AVAudioSessionCategoryOptionMixWithOthers forScopedModule:self];
         break;
     }
   }
@@ -260,22 +255,20 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
   
   ABI26_0_0EXAVAudioSessionMode audioSessionModeRequired = [self _getAudioSessionModeRequired];
   
-  if (_currentAudioSessionMode >= audioSessionModeRequired) {
+  if (audioSessionModeRequired == ABI26_0_0EXAVAudioSessionModeInactive) {
     return nil;
   }
   
-  AVAudioSession *session = [AVAudioSession sharedInstance];
-  
-  NSError *error = [self _updateAudioSessionCategory:session forAudioSessionMode:audioSessionModeRequired];
+  NSError *error;
+
+  error = [self _updateAudioSessionCategoryForAudioSessionMode:audioSessionModeRequired];
   if (error) {
     return error;
   }
-  
-  if (_currentAudioSessionMode == ABI26_0_0EXAVAudioSessionModeInactive) {
-    [session setActive:YES error:&error];
-    if (error) {
-      return error;
-    }
+
+  error = [_kernelAudioSessionManagerDelegate setActive:YES forScopedModule:self];
+  if (error) {
+    return error;
   }
   
   _currentAudioSessionMode = audioSessionModeRequired;
@@ -296,11 +289,8 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
     [_audioRecorder pause];
   }
   
-  NSError *error;
-  AVAudioSession *session = [AVAudioSession sharedInstance];
-  [session setActive:NO error:&error];
-  // Restore the AVAudioSession to the system default for proper sandboxing.
-  [session setCategory:AVAudioSessionCategorySoloAmbient error:&error];
+  NSError *error = [_kernelAudioSessionManagerDelegate setActive:NO forScopedModule:self];
+
   if (!error) {
     _currentAudioSessionMode = ABI26_0_0EXAVAudioSessionModeInactive;
   }
@@ -311,21 +301,27 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
 {
   ABI26_0_0EXAVAudioSessionMode audioSessionModeRequired = [self _getAudioSessionModeRequired];
   
+  // Current audio session mode is lower than the required one
+  // (we should rather promote the session than demote it).
   if (_currentAudioSessionMode <= audioSessionModeRequired) {
     return nil;
   }
   
+  // We require the session to be muted and it is active.
+  // Let's only update the category.
   if (audioSessionModeRequired == ABI26_0_0EXAVAudioSessionModeActiveMuted) {
-    NSError *error = [self _updateAudioSessionCategory:[AVAudioSession sharedInstance] forAudioSessionMode:audioSessionModeRequired];
+    NSError *error = [self _updateAudioSessionCategoryForAudioSessionMode:audioSessionModeRequired];
     if (!error) {
       _currentAudioSessionMode = ABI26_0_0EXAVAudioSessionModeActiveMuted;
     }
     return error;
   }
+
+  // We require the session to be inactive and it is active, let's deactivate it!
   return [self _deactivateAudioSession];
 }
 
-- (void)_handleAudioSessionInterruption:(NSNotification*)notification
+- (void)handleAudioSessionInterruption:(NSNotification *)notification
 {
   NSNumber *interruptionType = [[notification userInfo] objectForKey:AVAudioSessionInterruptionTypeKey];
   if (interruptionType.unsignedIntegerValue == AVAudioSessionInterruptionTypeBegan) {
@@ -337,7 +333,7 @@ NSString *const ABI26_0_0EXDidUpdatePlaybackStatusEventName = @"didUpdatePlaybac
   }];
 }
 
-- (void)_handleMediaServicesReset
+- (void)handleMediaServicesReset:(NSNotification *)notification
 {
   // See here: https://developer.apple.com/library/content/qa/qa1749/_index.html
   // (this is an unlikely notification to receive, but best practices suggests that we catch it just in case)
@@ -533,7 +529,7 @@ withEXVideoViewForTag:(nonnull NSNumber *)ReactABI26_0_0Tag
   }
 }
 
-ABI26_0_0RCT_EXPORT_MODULE(ExponentAV);
+ABI26_0_0EX_EXPORT_SCOPED_MODULE(ExponentAV, AudioSessionManager);
 
 - (NSArray<NSString *> *)supportedEvents
 {
@@ -821,6 +817,7 @@ ABI26_0_0RCT_EXPORT_METHOD(unloadAudioRecorder:(ABI26_0_0RCTPromiseResolveBlock)
 
 - (void)dealloc
 {
+  [_kernelAudioSessionManagerDelegate scopedModuleWillDeallocate:self];
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   
   // This will clear all @properties and deactivate the audio session:

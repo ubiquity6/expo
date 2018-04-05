@@ -30,6 +30,8 @@ FOUNDATION_EXPORT NSString * const EXAppDidRegisterUserNotificationSettingsNotif
  */
 @property (nonatomic, strong) NSDictionary *applicationKeys;
 
+@property (nonatomic, readonly) NSDictionary *launchOptions;
+
 #pragma mark - remote JS loading hooks
 
 /**
@@ -40,7 +42,6 @@ FOUNDATION_EXPORT NSString * const EXAppDidRegisterUserNotificationSettingsNotif
 
 #pragma mark - misc AppDelegate hooks
 
-- (void)setLaunchOptions:(NSDictionary * _Nullable)launchOptions;
 - (void)application:(UIApplication *)application didFinishLaunchingWithOptions:(nullable NSDictionary *)launchOptions;
 
 #pragma mark - APNS hooks

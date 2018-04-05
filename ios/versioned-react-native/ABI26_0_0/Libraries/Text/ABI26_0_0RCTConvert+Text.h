@@ -9,9 +9,13 @@
 
 #import <ReactABI26_0_0/ABI26_0_0RCTConvert.h>
 
+NS_ASSUME_NONNULL_BEGIN
+
 @interface ABI26_0_0RCTConvert (Text)
 
-+ (UITextAutocorrectionType)UITextAutocorrectionType:(id)json;
-+ (UITextSpellCheckingType)UITextSpellCheckingType:(id)json;
++ (UITextAutocorrectionType)UITextAutocorrectionType:(nullable id)json;
++ (UITextSpellCheckingType)UITextSpellCheckingType:(nullable id)json;
 
 @end
+
+NS_ASSUME_NONNULL_END

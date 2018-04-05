@@ -5,6 +5,7 @@
 //
 #import <UIKit/UIKit.h>
 #import "ABI26_0_0AIRGoogleMapPolyline.h"
+#import "ABI26_0_0AIRGMSPolyline.h"
 #import "ABI26_0_0AIRMapCoordinate.h"
 #import "ABI26_0_0AIRGoogleMapMarker.h"
 #import "ABI26_0_0AIRGoogleMapMarkerManager.h"
@@ -16,7 +17,7 @@
 - (instancetype)init
 {
   if (self = [super init]) {
-    _polyline = [[GMSPolyline alloc] init];
+    _polyline = [[ABI26_0_0AIRGMSPolyline alloc] init];
   }
   return self;
 }
@@ -24,13 +25,13 @@
 -(void)setCoordinates:(NSArray<ABI26_0_0AIRMapCoordinate *> *)coordinates
 {
   _coordinates = coordinates;
-  
+
   GMSMutablePath *path = [GMSMutablePath path];
   for(int i = 0; i < coordinates.count; i++)
   {
     [path addCoordinate:coordinates[i].coordinate];
   }
-  
+
    _polyline.path = path;
 }
 
@@ -68,6 +69,16 @@
 {
   _zIndex = zIndex;
   _polyline.zIndex = zIndex;
+}
+
+-(void)setTappable:(BOOL)tappable
+{
+  _tappable = tappable;
+  _polyline.tappable = tappable;
+}
+
+- (void)setOnPress:(ABI26_0_0RCTBubblingEventBlock)onPress {
+  _polyline.onPress = onPress;
 }
 
 @end

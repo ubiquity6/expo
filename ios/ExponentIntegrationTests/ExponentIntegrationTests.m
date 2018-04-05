@@ -4,6 +4,7 @@
 #import "EXKernel.h"
 #import "EXKernelLinkingManager.h"
 #import "EXRootViewController.h"
+#import "EXHomeAppManager.h"
 #import "EXShellManager.h"
 #import "EXTest.h"
 
@@ -27,10 +28,18 @@
   [self _loadConfig];
   
   _rootViewController = (EXRootViewController *)[ExpoKit sharedInstance].rootViewController;
-  [[NSNotificationCenter defaultCenter] addObserver:self
-                                           selector:@selector(_onKernelJSLoaded)
-                                               name:kEXKernelJSIsLoadedNotification
-                                             object:nil];
+  // if test environment isn't configured for a shell app, override here
+  // since clearly we're running tests
+  if ([EXShellManager sharedInstance].testEnvironment == EXTestEnvironmentNone) {
+    [EXShellManager sharedInstance].testEnvironment = EXTestEnvironmentLocal;
+  }
+  
+  // NOTE(2018-02-20): Without giving the kernel a second to run, it never opens test-suite. With a
+  // cursory pass through the code, I didn't see the correct event to wait for. Perhaps after we
+  // implement a pure-native kernel, we'll be able to remove this shoddy delay.
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    [[EXKernel sharedInstance].serviceRegistry.linkingManager openUrl:_testSuiteUrl isUniversalLink:NO];
+  });
   
 }
 
@@ -49,7 +58,6 @@
                              jsTestSuiteResult = notification.userInfo;
                              [expectation fulfill];
                            }];
-  [_rootViewController applicationWillEnterForeground];
   
   [self waitForExpectations:@[expectation] timeout:180];
   [NSNotificationCenter.defaultCenter removeObserver:observer];
@@ -68,22 +76,6 @@
   if (testConfig) {
     _testSuiteUrl = testConfig[@"testSuiteUrl"];
   }
-}
-
-- (void)_onKernelJSLoaded
-{
-  // if test environment isn't configured for a shell app, override here
-  // since clearly we're running tests
-  if ([EXShellManager sharedInstance].testEnvironment == EXTestEnvironmentNone) {
-    [EXShellManager sharedInstance].testEnvironment = EXTestEnvironmentLocal;
-  }
-  
-  // NOTE(2018-02-20): Without giving the kernel a second to run, it never opens test-suite. With a
-  // cursory pass through the code, I didn't see the correct event to wait for. Perhaps after we
-  // implement a pure-native kernel, we'll be able to remove this shoddy delay.
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-    [[EXKernel sharedInstance].serviceRegistry.linkingManager openUrl:_testSuiteUrl isUniversalLink:NO];
-  });
 }
 
 @end

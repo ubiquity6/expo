@@ -48,7 +48,6 @@ import host.exp.exponent.analytics.Analytics;
 import host.exp.exponent.analytics.EXL;
 import host.exp.exponent.branch.BranchManager;
 import host.exp.exponent.di.NativeModuleDepsProvider;
-import host.exp.exponent.gcm.ExponentGcmListenerService;
 import host.exp.exponent.kernel.ExperienceId;
 import host.exp.exponent.kernel.ExponentError;
 import host.exp.exponent.kernel.ExponentUrls;
@@ -57,6 +56,7 @@ import host.exp.exponent.kernel.KernelConstants;
 import host.exp.exponent.kernel.KernelProvider;
 import host.exp.exponent.notifications.ExponentNotification;
 import host.exp.exponent.notifications.ExponentNotificationManager;
+import host.exp.exponent.notifications.PushNotificationHelper;
 import host.exp.exponent.notifications.ReceivedNotificationEvent;
 import host.exp.exponent.storage.ExponentSharedPreferences;
 import host.exp.exponent.utils.AsyncCondition;
@@ -100,6 +100,7 @@ public class ExperienceActivity extends BaseExperienceActivity implements Expone
   private int mNotificationAnimationFrame;
   private Notification.Builder mNotificationBuilder;
   private boolean mIsLoadExperienceAllowedToRun = false;
+  private boolean mShouldShowLoadingScreenWithOptimisticManifest = false;
 
   // In detach we want UNVERSIONED most places. We still need the numbered sdk version
   // when creating cache keys.
@@ -151,6 +152,7 @@ public class ExperienceActivity extends BaseExperienceActivity implements Expone
     super.onCreate(savedInstanceState);
 
     mIsLoadExperienceAllowedToRun = true;
+    mShouldShowLoadingScreenWithOptimisticManifest = true;
 
     NativeModuleDepsProvider.getInstance().inject(ExperienceActivity.class, this);
     EventBus.getDefault().registerSticky(this);
@@ -217,6 +219,11 @@ public class ExperienceActivity extends BaseExperienceActivity implements Expone
         @Override
         public void onBundleCompleted(String localBundlePath) {
           setBundle(localBundlePath);
+        }
+
+        @Override
+        public void emitEvent(JSONObject params) {
+          emitUpdatesEvent(params);
         }
 
         @Override
@@ -331,6 +338,10 @@ public class ExperienceActivity extends BaseExperienceActivity implements Expone
           return;
         }
 
+        if (!mShouldShowLoadingScreenWithOptimisticManifest) {
+          return;
+        }
+
         // grab SDK version from optimisticManifest -- in this context we just need to know ensure it's above 5.0.0 (which it should always be)
         String optimisticSdkVersion = manifest.optString(ExponentManifest.MANIFEST_SDK_VERSION_KEY);
         ExperienceActivityUtils.setWindowTransparency(optimisticSdkVersion, manifest, ExperienceActivity.this);
@@ -397,6 +408,7 @@ public class ExperienceActivity extends BaseExperienceActivity implements Expone
     try {
       mExperienceIdString = manifest.getString(ExponentManifest.MANIFEST_ID_KEY);
       mExperienceId = ExperienceId.create(mExperienceIdString);
+      AsyncCondition.notify(KernelConstants.EXPERIENCE_ID_SET_FOR_ACTIVITY_KEY);
     } catch (JSONException e) {
       KernelProvider.getInstance().handleError("No ID found in manifest.");
       return;
@@ -487,6 +499,9 @@ public class ExperienceActivity extends BaseExperienceActivity implements Expone
   }
 
   public void setBundle(final String localBundlePath) {
+    // by this point, setManifest should have also been called, so prevent
+    // setLoadingScreenManifest from showing a rogue loading screen
+    mShouldShowLoadingScreenWithOptimisticManifest = false;
     if (!isDebugModeEnabled()) {
       final boolean finalIsReadyForBundle = mIsReadyForBundle;
       AsyncCondition.wait(READY_FOR_BUNDLE, new AsyncCondition.AsyncConditionListener() {
@@ -576,6 +591,10 @@ public class ExperienceActivity extends BaseExperienceActivity implements Expone
     super.onNewIntent(intent);
   }
 
+  public void emitUpdatesEvent(JSONObject params) {
+    KernelProvider.getInstance().addEventForExperience(mManifestUrl, new KernelConstants.ExperienceEvent(AppLoader.UPDATES_EVENT_NAME, params.toString()));
+  }
+
   @Override
   public boolean isDebugModeEnabled() {
     return ExponentManifest.isDebugModeEnabled(mManifest);
@@ -598,9 +617,9 @@ public class ExperienceActivity extends BaseExperienceActivity implements Expone
 
   @Override
   public void handleUnreadNotifications(JSONArray unreadNotifications) {
-    ExponentGcmListenerService gcmListenerService = ExponentGcmListenerService.getInstance();
-    if (gcmListenerService != null) {
-      gcmListenerService.removeNotifications(unreadNotifications);
+    PushNotificationHelper pushNotificationHelper = PushNotificationHelper.getInstance();
+    if (pushNotificationHelper != null) {
+      pushNotificationHelper.removeNotifications(this, unreadNotifications);
     }
   }
 

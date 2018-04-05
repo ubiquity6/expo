@@ -20,11 +20,12 @@
 @property (nonatomic, weak) ABI26_0_0AIRMap *map;
 
 @property (nonatomic, strong) MKPolyline *polyline;
-@property (nonatomic, strong) MKPolylineRenderer *renderer;
+@property (nonatomic, strong) MKOverlayPathRenderer *renderer;
 
 @property (nonatomic, strong) NSArray<ABI26_0_0AIRMapCoordinate *> *coordinates;
 @property (nonatomic, strong) UIColor *fillColor;
 @property (nonatomic, strong) UIColor *strokeColor;
+@property (nonatomic, strong) NSArray<UIColor *> *strokeColors;
 @property (nonatomic, assign) CGFloat strokeWidth;
 @property (nonatomic, assign) CGFloat miterLimit;
 @property (nonatomic, assign) CGLineCap lineCap;
