@@ -738,6 +738,22 @@ private:
       case GL_UNPACK_FLIP_Y_WEBGL:
         unpackFLipY = param;
         break;
+      // for these unimplemented options, we allow setting them to their default values, but fail with NOT IMPL if the user tries to set them off-default.
+      case GL_PACK_ALIGNMENT:
+        if(param != 4) {
+          EXGLSysLog("EXGL: gl.pixelStorei() doesn't support GL_PACK_ALIGNMENT parameter yet!");
+        }
+        break;
+      case GL_UNPACK_ALIGNMENT:
+        if(param != 4) {
+          EXGLSysLog("EXGL: gl.pixelStorei() doesn't support GL_UNPACK_ALIGNMENT parameter yet!");
+        }
+        break;
+      case GL_UNPACK_PREMULTIPLY_ALPHA_WEBGL:
+        if(param) {
+          EXGLSysLog("EXGL: gl.pixelStorei() doesn't support GL_UNPACK_PREMULTIPLY_ALPHA_WEBGL parameter yet!");
+        }
+        break;
       default:
         EXGLSysLog("EXGL: gl.pixelStorei() doesn't support this parameter yet!");
         break;
