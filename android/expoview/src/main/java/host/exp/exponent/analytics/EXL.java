@@ -8,12 +8,21 @@ import com.amplitude.api.Amplitude;
 
 import org.json.JSONObject;
 
+import host.exp.exponent.Constants;
 import host.exp.expoview.Exponent;
 
 // EXpo Log
 public class EXL {
 
   private static final String TAG = EXL.class.getSimpleName();
+
+  // Use this for errors that we expect to happen in tests. They will only log it
+  // they occur outside of a test environment.
+  public static void testError(final Throwable e) {
+    if (!Constants.isTest()) {
+      e.printStackTrace();
+    }
+  }
 
   public static void d(final String tag, final String msg) {
     Log.d(tag, msg);

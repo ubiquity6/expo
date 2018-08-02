@@ -13,6 +13,7 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
 import com.amplitude.api.Amplitude;
@@ -24,6 +25,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,7 @@ import java.util.Set;
 import javax.inject.Inject;
 
 import de.greenrobot.event.EventBus;
+import expo.core.interfaces.Package;
 import host.exp.exponent.ABIVersion;
 import host.exp.exponent.Constants;
 import host.exp.exponent.ExponentManifest;
@@ -47,6 +50,8 @@ import host.exp.exponent.kernel.ExponentErrorMessage;
 import host.exp.exponent.kernel.KernelConstants;
 import host.exp.exponent.kernel.KernelProvider;
 import host.exp.exponent.kernel.services.ErrorRecoveryManager;
+import host.exp.exponent.kernel.services.ExpoKernelServiceRegistry;
+import host.exp.exponent.kernel.services.SplashScreenKernelService;
 import host.exp.exponent.notifications.ExponentNotification;
 import host.exp.exponent.storage.ExponentSharedPreferences;
 import host.exp.exponent.utils.JSONBundleConverter;
@@ -99,6 +104,7 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
   private Handler mHandler = new Handler();
   private Handler mLoadingHandler = new Handler();
   private DoubleTapReloadRecognizer mDoubleTapReloadRecognizer;
+  private SplashScreenKernelService mSplashScreenKernelService;
   protected boolean mIsLoading = true;
   protected String mJSBundlePath;
   protected JSONObject mManifest;
@@ -107,6 +113,9 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
 
   @Inject
   protected ExponentSharedPreferences mExponentSharedPreferences;
+
+  @Inject
+  ExpoKernelServiceRegistry mExpoKernelServiceRegistry;
 
   public boolean isLoading() {
     return mIsLoading;
@@ -142,6 +151,7 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
     mDoubleTapReloadRecognizer = new DoubleTapReloadRecognizer();
     Exponent.initialize(this, getApplication());
     NativeModuleDepsProvider.getInstance().inject(ReactNativeActivity.class, this);
+    mSplashScreenKernelService = mExpoKernelServiceRegistry.getSplashScreenKernelService();
 
     // Can't call this here because subclasses need to do other initialization
     // before their listener methods are called.
@@ -150,6 +160,11 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
 
   protected void setView(final View view) {
     mContainer.removeAllViews();
+    if (Constants.isShellApp() && Constants.SHOW_LOADING_VIEW_IN_SHELL_APP) {
+      ViewGroup.LayoutParams layoutParams = mContainer.getLayoutParams();
+      layoutParams.height = 0;
+      mContainer.setLayoutParams(layoutParams);
+    }
     addView(view);
   }
 
@@ -165,15 +180,11 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
   }
 
   protected void stopLoading() {
-    if (!mIsLoading) {
+    if (!mIsLoading || !canHideLoadingScreen()) {
       return;
     }
     mHandler.removeCallbacksAndMessages(null);
-    mLoadingView.setAlpha(0.0f);
-    mLoadingView.setShowIcon(false);
-    mLoadingView.setDoneLoading();
-    mIsLoading = false;
-    mLoadingHandler.removeCallbacksAndMessages(null);
+    hideLoadingScreen();
   }
 
   protected void updateLoadingProgress(String status, Integer done, Integer total) {
@@ -191,7 +202,9 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
     }
 
     if ((int) mReactRootView.call("getChildCount") > 0) {
-      fadeLoadingScreen();
+      if (canHideLoadingScreen()) {
+        fadeLoadingScreen();
+      }
       onDoneLoading();
       ErrorRecoveryManager.getInstance(mExperienceId).markExperienceLoaded();
 
@@ -221,15 +234,32 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
     runOnUiThread(new Runnable() {
       @Override
       public void run() {
-        mLoadingView.setAlpha(0.0f);
-        mLoadingView.setShowIcon(false);
-        mLoadingView.setDoneLoading();
-        mIsLoading = false;
-        mLoadingHandler.removeCallbacksAndMessages(null);
-
+        hideLoadingScreen();
         EventBus.getDefault().post(new ExperienceDoneLoadingEvent());
       }
     });
+  }
+
+  private void hideLoadingScreen() {
+    if (Constants.isShellApp() && Constants.SHOW_LOADING_VIEW_IN_SHELL_APP) {
+      ViewGroup.LayoutParams layoutParams = mContainer.getLayoutParams();
+      layoutParams.height = mLayout.getHeight();
+      mContainer.setLayoutParams(layoutParams);
+    }
+
+    if (mLoadingView != null && mLoadingView.getParent() == mLayout) {
+      mLoadingView.setAlpha(0.0f);
+      mLoadingView.setShowIcon(false);
+      mLoadingView.setDoneLoading();
+    }
+
+    mSplashScreenKernelService.reset();
+    mIsLoading = false;
+    mLoadingHandler.removeCallbacksAndMessages(null);
+  }
+
+  private boolean canHideLoadingScreen() {
+    return (!mSplashScreenKernelService.isAppLoadingStarted() || mSplashScreenKernelService.isAppLoadingFinished()) && mSplashScreenKernelService.shouldAutoHide();
   }
 
   @Override
@@ -361,7 +391,7 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
 
   public RNObject startReactInstance(final Exponent.StartReactInstanceDelegate delegate, final String mIntentUri, final RNObject mLinkingPackage,
                                      final String mSDKVersion, final ExponentNotification mNotification, final boolean mIsShellApp,
-                                     final List<? extends Object> extraNativeModules, DevBundleDownloadProgressListener progressListener) {
+                                     final List<? extends Object> extraNativeModules, final List<Package> extraExpoPackages, DevBundleDownloadProgressListener progressListener) {
 
     if (mIsCrashed || !delegate.isInForeground()) {
       // Can sometimes get here after an error has occurred. Return early or else we'll hit
@@ -381,10 +411,13 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
     instanceManagerBuilderProperties.jsBundlePath = mJSBundlePath;
     instanceManagerBuilderProperties.linkingPackage = mLinkingPackage;
     instanceManagerBuilderProperties.experienceProperties = experienceProperties;
+    instanceManagerBuilderProperties.expoPackages = extraExpoPackages;
+    instanceManagerBuilderProperties.exponentPackageDelegate = delegate.getExponentPackageDelegate();
     instanceManagerBuilderProperties.manifest = mManifest;
 
     RNObject versionedUtils = new RNObject("host.exp.exponent.VersionedUtils").loadVersion(mSDKVersion);
     RNObject builder = versionedUtils.callRecursive("getReactInstanceManagerBuilder", instanceManagerBuilderProperties);
+
     if (extraNativeModules != null) {
       for (Object nativeModule : extraNativeModules) {
         builder.call("addPackage", nativeModule);
@@ -404,6 +437,14 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
             .loadVersion(mSDKVersion)
             .construct(progressListener);
         builder.callRecursive("setDevBundleDownloadListener", devBundleDownloadListener.get());
+      }
+
+      // checkForReactViews() is normally called in dev mode by devBundleDownloadListener.onSuccess()
+      // so that AppLoading will continue to show the splash screen correctly. However, the
+      // onSuccess() method is not called by RN for SDK 25 and below, so we need to check for react views here
+      // TODO: remove once SDK 25 is phased out
+      if (ABIVersion.toNumber(mSDKVersion) < ABIVersion.toNumber("26.0.0")) {
+        checkForReactViews();
       }
     } else {
       checkForReactViews();
@@ -476,6 +517,9 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
     RNObject devSettings = mReactInstanceManager.callRecursive("getDevSupportManager").callRecursive("getDevSettings");
     if (devSettings != null) {
       devSettings.setField("exponentActivityId", mActivityId);
+      if ((boolean) devSettings.call("isRemoteJSDebugEnabled")) {
+        checkForReactViews();
+      }
     }
 
     mReactInstanceManager.onHostResume(this, this);
@@ -525,6 +569,10 @@ public abstract class ReactNativeActivity extends FragmentActivity implements co
     if (mManifestUrl != null && mManifestUrl.equals(event.manifestUrl)) {
       pollForEventsToSendToRN();
     }
+  }
+
+  public void onEvent(BaseExperienceActivity.ExperienceContentLoaded event) {
+    fadeLoadingScreen();
   }
 
   private void pollForEventsToSendToRN() {

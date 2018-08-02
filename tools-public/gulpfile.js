@@ -9,7 +9,6 @@ const minimist = require('minimist');
 const path = require('path');
 const _ = require('lodash');
 const {
-  IosClient,
   IosIcons,
   IosShellApp,
   AndroidShellApp,
@@ -127,16 +126,6 @@ function createIOSShellAppWithArguments() {
   }
 }
 
-function buildIOSClientWithArguments() {
-  const { type, configuration, verbose } = argv;
-  return IosClient.buildAsync(type, configuration, verbose);
-}
-
-function configureIOSClientBundleWithArguments() {
-  const { archivePath, bundleId, appleTeamId } = argv;
-  return IosClient.configureBundleAsync(archivePath, bundleId, appleTeamId);
-}
-
 function createIOSKeychainWithArguments() {
   validateArgv({
     appUUID: 'Must run with `--appUUID APP_UUID`',
@@ -173,9 +162,12 @@ function buildAndSignIpaWithArguments() {
     certPassword: 'Must run with `--certPassword CERT_PASSWORD`',
     teamID: 'Must run with `--teamID TEAM_ID`',
     bundleIdentifier: 'Must run with `--bundleIdentifier BUNDLE_IDENTIFIER`',
+    manifestPath: 'Must run with `--manifestPath MANIFEST_PATH`',
   });
 
-  const builder = createIPABuilder(argv);
+  const manifest = JSON.parse(fs.readFileSync(argv.manifestPath, 'utf8'));
+
+  const builder = createIPABuilder({ manifest, ...argv });
   return builder.build();
 }
 
@@ -214,8 +206,6 @@ gulp.task('android:create-keystore', createAndroidKeystoreWithArguments);
 
 // iOS
 gulp.task('ios-shell-app', createIOSShellAppWithArguments);
-gulp.task('build-ios-client', buildIOSClientWithArguments);
-gulp.task('ios:configure-client-bundle', configureIOSClientBundleWithArguments);
 gulp.task('ios:create-keychain', createIOSKeychainWithArguments);
 gulp.task('ios:import-cert-into-keychain', importCertIntoIOSKeychainWithArguments);
 gulp.task('ios:delete-keychain', deleteIOSKeychainWithArguments);

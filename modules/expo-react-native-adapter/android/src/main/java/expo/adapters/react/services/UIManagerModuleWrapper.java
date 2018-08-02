@@ -9,18 +9,27 @@ import com.facebook.react.modules.core.PermissionListener;
 import com.facebook.react.uimanager.NativeViewHierarchyManager;
 import com.facebook.react.uimanager.UIManagerModule;
 
+import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
+import expo.core.interfaces.ActivityProvider;
 import expo.core.interfaces.InternalModule;
 import expo.core.interfaces.LifecycleEventListener;
+import expo.core.interfaces.JavaScriptContextProvider;
 import expo.core.interfaces.services.UIManager;
 import expo.interfaces.permissions.PermissionsManager;
 import expo.interfaces.permissions.PermissionsListener;
 
-public class UIManagerModuleWrapper implements InternalModule, UIManager, PermissionsManager {
+public class UIManagerModuleWrapper implements
+    ActivityProvider,
+    JavaScriptContextProvider,
+    InternalModule,
+    PermissionsManager,
+    UIManager
+{
   private ReactContext mReactContext;
   private Map<LifecycleEventListener, com.facebook.react.bridge.LifecycleEventListener> mLifecycleListenersMap = new WeakHashMap<>();
 
@@ -28,14 +37,23 @@ public class UIManagerModuleWrapper implements InternalModule, UIManager, Permis
     mReactContext = reactContext;
   }
 
-  @Override
-  public List<Class> getExportedInterfaces() {
-    return Arrays.asList((Class) PermissionsManager.class, UIManager.class, UIManagerModuleWrapper.class);
+  protected ReactContext getContext() {
+    return mReactContext;
   }
 
   @Override
-  public <T extends View> void addUIBlock(final int tag, final UIBlock<T> block) {
-    mReactContext.getNativeModule(UIManagerModule.class).addUIBlock(new com.facebook.react.uimanager.UIBlock() {
+  public List<Class> getExportedInterfaces() {
+    return Arrays.<Class>asList(
+      ActivityProvider.class,
+      JavaScriptContextProvider.class,
+      PermissionsManager.class,
+      UIManager.class
+    );
+  }
+
+  @Override
+  public <T> void addUIBlock(final int tag, final UIBlock<T> block, final Class<T> tClass) {
+    getContext().getNativeModule(UIManagerModule.class).addUIBlock(new com.facebook.react.uimanager.UIBlock() {
       @Override
       public void execute(NativeViewHierarchyManager nativeViewHierarchyManager) {
         View view = nativeViewHierarchyManager.resolveView(tag);
@@ -43,11 +61,12 @@ public class UIManagerModuleWrapper implements InternalModule, UIManager, Permis
           block.reject(new IllegalArgumentException("Expected view for this tag not to be null."));
         } else {
           try {
-            @SuppressWarnings("unchecked")
-            T typedView = (T) view;
-            block.resolve(typedView);
-          } catch (ClassCastException e) {
-            block.reject(new IllegalStateException("Expected view not to be of class " + view.getClass()));
+            if (tClass.isInstance(view)) {
+              block.resolve(tClass.cast(view));
+            } else {
+              block.reject(new IllegalStateException(
+                  "Expected view to be of " + tClass + "; found " + view.getClass() + " instead"));
+            }
           } catch (Exception e) {
             block.reject(e);
           }
@@ -56,24 +75,51 @@ public class UIManagerModuleWrapper implements InternalModule, UIManager, Permis
     });
   }
 
+  @Override
+  public void runOnUiQueueThread(Runnable runnable) {
+    if (getContext().isOnUiQueueThread()) {
+      runnable.run();
+    } else {
+      getContext().runOnUiQueueThread(runnable);
+    }
+  }
+
+  @Override
+  public void runOnClientCodeQueueThread(Runnable runnable) {
+    if (getContext().isOnJSQueueThread()) {
+      runnable.run();
+    } else {
+      getContext().runOnJSQueueThread(runnable);
+    }
+  }
 
 
   @Override
   public void registerLifecycleEventListener(final LifecycleEventListener listener) {
+    final WeakReference<LifecycleEventListener> weakListener = new WeakReference<>(listener);
     mLifecycleListenersMap.put(listener, new com.facebook.react.bridge.LifecycleEventListener() {
       @Override
       public void onHostResume() {
-        listener.onHostResume();
+        LifecycleEventListener listener = weakListener.get();
+        if (listener != null) {
+          listener.onHostResume();
+        }
       }
 
       @Override
       public void onHostPause() {
-        listener.onHostPause();
+        LifecycleEventListener listener = weakListener.get();
+        if (listener != null) {
+          listener.onHostPause();
+        }
       }
 
       @Override
       public void onHostDestroy() {
-        listener.onHostDestroy();
+        LifecycleEventListener listener = weakListener.get();
+        if (listener != null) {
+          listener.onHostDestroy();
+        }
       }
     });
     mReactContext.addLifecycleEventListener(mLifecycleListenersMap.get(listener));
@@ -81,20 +127,13 @@ public class UIManagerModuleWrapper implements InternalModule, UIManager, Permis
 
   @Override
   public void unregisterLifecycleEventListener(LifecycleEventListener listener) {
-    mReactContext.removeLifecycleEventListener(mLifecycleListenersMap.get(listener));
+    getContext().removeLifecycleEventListener(mLifecycleListenersMap.get(listener));
     mLifecycleListenersMap.remove(listener);
-  }
-
-  public void unregisterEventListeners() {
-    for (com.facebook.react.bridge.LifecycleEventListener listener : mLifecycleListenersMap.values()) {
-      mReactContext.removeLifecycleEventListener(listener);
-    }
-    mLifecycleListenersMap.clear();
   }
 
   @Override
   public boolean requestPermissions(String[] permissions, final int requestCode, final PermissionsListener listener) {
-    Activity currentActivity = mReactContext.getCurrentActivity();
+    Activity currentActivity = getContext().getCurrentActivity();
     if (currentActivity instanceof PermissionAwareActivity) {
       PermissionAwareActivity activity = (PermissionAwareActivity) currentActivity;
       activity.requestPermissions(permissions, requestCode, new PermissionListener() {
@@ -112,5 +151,14 @@ public class UIManagerModuleWrapper implements InternalModule, UIManager, Permis
     } else {
       return false;
     }
+  }
+
+  public long getJavaScriptContextRef() {
+    return mReactContext.getJavaScriptContextHolder().get();
+  }
+
+  @Override
+  public Activity getCurrentActivity() {
+    return getContext().getCurrentActivity();
   }
 }

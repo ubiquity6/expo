@@ -1,7 +1,5 @@
 package expo.core;
 
-import android.util.Log;
-
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -16,6 +14,7 @@ public class ModuleRegistry {
   private final Map<Class, InternalModule> mInternalModulesMap = new HashMap<>();
   private final Map<String, ViewManager> mViewManagersMap = new HashMap<>();
   private final Map<String, ExportedModule> mExportedModulesMap = new HashMap<>();
+  private final Map<Class, ExportedModule> mExportedModulesByClassMap = new HashMap<>();
 
   private List<WeakReference<ModuleRegistryConsumer>> mRegistryConsumers = new ArrayList<>();
 
@@ -51,6 +50,10 @@ public class ModuleRegistry {
     return mExportedModulesMap.get(name);
   }
 
+  public ExportedModule getExportedModuleOfClass(Class moduleClass) {
+    return mExportedModulesByClassMap.get(moduleClass);
+  }
+
   public Collection<ViewManager> getAllViewManagers() {
     return mViewManagersMap.values();
   }
@@ -67,35 +70,28 @@ public class ModuleRegistry {
 
   public void registerInternalModule(InternalModule module) {
     for (Class exportedInterface : module.getExportedInterfaces()) {
-      if (mInternalModulesMap.containsKey(exportedInterface)) {
-        Log.w("E_DUPLICATE_MOD_ALIAS", "Module map already contains a module for key " + exportedInterface + ". Dropping module " + module + ".");
-      } else {
-        mInternalModulesMap.put(exportedInterface, module);
-        maybeAddRegistryConsumer(module);
-      }
+      mInternalModulesMap.put(exportedInterface, module);
+      maybeAddRegistryConsumer(module);
     }
+  }
+
+  public InternalModule unregisterInternalModule(Class exportedInterface) {
+    return mInternalModulesMap.remove(exportedInterface);
   }
 
   public void registerExportedModule(ExportedModule module) {
     String moduleName = module.getName();
 
-    if (mExportedModulesMap.containsKey(moduleName)) {
-      Log.w("E_DUPLICATE_MOD_ALIAS", "Exported modules map already contains a module for key " + moduleName + ". Dropping module " + module + ".");
-    } else {
-      mExportedModulesMap.put(moduleName, module);
-      maybeAddRegistryConsumer(module);
-    }
+    mExportedModulesMap.put(moduleName, module);
+    mExportedModulesByClassMap.put(module.getClass(), module);
+    maybeAddRegistryConsumer(module);
   }
 
   public void registerViewManager(ViewManager manager) {
     String managerName = manager.getName();
 
-    if (mViewManagersMap.containsKey(managerName)) {
-      Log.w("E_DUPLICATE_MOD_ALIAS", "View managers map already contains a manager for key " + managerName + ". Dropping manager " + manager + ".");
-    } else {
-      mViewManagersMap.put(managerName, manager);
-      maybeAddRegistryConsumer(manager);
-    }
+    mViewManagersMap.put(managerName, manager);
+    maybeAddRegistryConsumer(manager);
   }
 
   /********************************************************

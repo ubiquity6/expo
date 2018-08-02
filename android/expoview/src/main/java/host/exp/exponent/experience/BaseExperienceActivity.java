@@ -45,6 +45,9 @@ public abstract class BaseExperienceActivity extends MultipleVersionReactNativeA
   public static class ExperienceBackgroundedEvent extends ExperienceEvent {
     ExperienceBackgroundedEvent(ExperienceId experienceId) { super(experienceId); }
   }
+  public static class ExperienceContentLoaded extends ExperienceEvent {
+    public ExperienceContentLoaded(ExperienceId experienceId) { super(experienceId); }
+  }
 
   private static BaseExperienceActivity sVisibleActivity;
 
@@ -257,7 +260,7 @@ public abstract class BaseExperienceActivity extends MultipleVersionReactNativeA
     int googlePlayServicesCode = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(this);
     if (googlePlayServicesCode == ConnectionResult.SUCCESS) {
       if (!Constants.FCM_ENABLED) {
-        Intent intent = new Intent(this, Constants.FCM_ENABLED ? FcmRegistrationIntentService.class : GcmRegistrationIntentService.class);
+        Intent intent = new Intent(this, GcmRegistrationIntentService.class);
         startService(intent);
       }
     } else if (!BuildConfig.DEBUG) {

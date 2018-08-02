@@ -3,7 +3,7 @@
 
 Pod::Spec.new do |s|
   s.name = "ExpoKit"
-  s.version = "2.6.5"
+  s.version = "2.7.2"
   s.summary = 'ExpoKit'
   s.description = 'ExpoKit allows native projects to integrate with the Expo SDK.'
   s.homepage = 'http://docs.expo.io'
@@ -24,7 +24,7 @@ Pod::Spec.new do |s|
     ss.dependency 'AppAuth', '~> 0.4'
     ss.dependency 'CocoaLumberjack', '~> 3.2.1'
     ss.dependency 'Crashlytics', '~> 3.8'
-    ss.dependency 'FBAudienceNetwork', '4.28.1'
+    ss.dependency 'FBAudienceNetwork', '4.99.0'
     ss.dependency 'FBSDKCoreKit', '~> 4.28'
     ss.dependency 'FBSDKLoginKit', '~> 4.28'
     ss.dependency 'FBSDKShareKit', '~> 4.28'
@@ -38,18 +38,15 @@ Pod::Spec.new do |s|
     ss.dependency 'Branch', '~> 0.24.2'
     ss.dependency 'Google-Mobile-Ads-SDK', '~> 7.22.0'
     ss.dependency 'React' # explicit dependency required for CocoaPods >= 1.5.0
-  end
 
-  s.subspec "CPP" do |ss|
-    ss.dependency "ExpoKit/Core"
-    ss.source_files = 'cpp/*.{h,c,cpp,m,mm}', 'cpp/**/*.{h,c,cpp,m,mm}'
-    ss.exclude_files = 'cpp/UEXGL.*'
-  end
-
-  s.subspec "GL" do |ss|
-    ss.dependency "ExpoKit/CPP"
-    ss.source_files = 'cpp/UEXGL.*'
-    ss.compiler_flags = '-x objective-c++'
+    # Universal modules required by ExpoKit so the code compiles
+    ss.dependency 'EXCore'
+    ss.dependency 'EXReactNativeAdapter'
+    ss.dependency 'EXSensorsInterface'
+    ss.dependency 'EXFileSystemInterface'
+    ss.dependency 'EXPermissionsInterface'
+    ss.dependency 'EXCameraInterface'
+    ss.dependency 'EXConstantsInterface'
   end
 
   s.subspec "Payments" do |ss|
@@ -64,9 +61,6 @@ Pod::Spec.new do |s|
   end
 
   s.subspec "FaceDetector" do |ss|
-    ss.dependency "ExpoKit/Core"
-    ss.dependency "GoogleMobileVision/FaceDetector", '~> 1.1.0'
-    ss.dependency "GoogleMobileVision/MVDataOutput", '~> 1.1.0'
-    ss.source_files = 'ios/Exponent/Versioned/Optional/FaceDetector/**'
+    ss.dependency "EXFaceDetector"
   end
 end

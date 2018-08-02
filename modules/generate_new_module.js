@@ -1,5 +1,8 @@
+#!/usr/bin/env node
+
 const readline = require('readline');
 const proc = require('child_process');
+const path = require('path');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -43,11 +46,11 @@ async function main() {
       configuration.javaModule = javaModule;
     }
   );
-  proc.execSync(`cp -R module-template ${configuration.jsName}`);
+  proc.execSync(`cp -R expo-module-template ${configuration.jsName}`);
   proc.execSync(`find ./${configuration.jsName} -name '.DS_Store' -type f -delete`);
   if (configuration.podName) {
     proc.execSync(
-      `mv ${configuration.jsName}/EXModuleTemplate.podspec ${configuration.jsName}/${configuration.podName}.podspec`
+      `mv ${configuration.jsName}/ios/EXModuleTemplate.podspec ${configuration.jsName}/ios/${configuration.podName}.podspec`
     );
     proc.execSync(
       `mv ${configuration.jsName}/ios/EXModuleTemplate/EXModuleTemplate.h ${configuration.jsName}/ios/EXModuleTemplate/${configuration.podName}.h`
@@ -63,7 +66,7 @@ async function main() {
     );
   } else {
     proc.execSync(`rm -r ${configuration.jsName}/ios`);
-    proc.execSync(`rm ${configuration.jsName}/EXModuleTemplate.podspec`);
+    proc.execSync(`rm ${configuration.jsName}/ios/EXModuleTemplate.podspec`);
   }
 
   proc.execSync(
@@ -75,6 +78,21 @@ async function main() {
   proc.execSync(
     `find ./${configuration.jsName} -type f -exec sed -i '' -e 's/EXModuleTemplate/${configuration.podName}/g' {} \\;`
   );
+
+  const javaDir = path.join(
+    configuration.jsName,
+    'android',
+    'src',
+    'main',
+    'java',
+    ...configuration.javaModule.split('.')
+  );
+
+  proc.execSync(`mkdir -p ${javaDir}`);
+
+  proc.execSync(`echo "package ${configuration.javaModule};" > ${javaDir}/Placeholder.java`);
+  proc.execSync(`echo "class Placeholder {}" >> ${javaDir}/Placeholder.java`);
+
   rl.close();
 }
 

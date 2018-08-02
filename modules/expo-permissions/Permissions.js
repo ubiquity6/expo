@@ -1,8 +1,8 @@
 // @flow
-
+import { Platform } from 'react-native';
 import { NativeModulesProxy } from 'expo-core';
 
-let { ExponentPermissions: Permissions } = NativeModulesProxy;
+const { ExponentPermissions: Permissions } = NativeModulesProxy;
 
 type PermissionType =
   | 'audioRecording'
@@ -14,7 +14,8 @@ type PermissionType =
   | 'notifications'
   | 'reminders'
   | 'systemBrightness'
-  | 'userFacingNotifications';
+  | 'userFacingNotifications'
+  | 'SMS';
 type PermissionStatus = 'undetermined' | 'granted' | 'denied';
 type PermissionExpires = 'never';
 type PermissionDetailsLocationIOS = {
@@ -48,3 +49,4 @@ export const SYSTEM_BRIGHTNESS = 'systemBrightness';
 export const CAMERA_ROLL = 'cameraRoll';
 export const CALENDAR = 'calendar';
 export const REMINDERS = 'reminders';
+export const SMS = 'SMS';

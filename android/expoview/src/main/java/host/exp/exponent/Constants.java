@@ -61,13 +61,13 @@ public class Constants {
   static {
     List<String> abiVersions = new ArrayList<>();
     // THIS COMMENT IS USED BY android-build-aar.sh DO NOT MODIFY
+    abiVersions.add("29.0.0");
     abiVersions.add("28.0.0");
     abiVersions.add("27.0.0");
     abiVersions.add("26.0.0");
     abiVersions.add("25.0.0");
     abiVersions.add("24.0.0");
     abiVersions.add("23.0.0");
-    abiVersions.add("22.0.0");
 
     if (TEMPORARY_ABI_VERSION != null) {
       abiVersions.add(TEMPORARY_ABI_VERSION);
@@ -148,5 +148,15 @@ public class Constants {
 
   public static boolean isDetached() {
     return IS_DETACHED;
+  }
+
+  private static boolean sIsTest = false;
+
+  public static void setInTest() {
+    sIsTest = true;
+  }
+
+  public static boolean isTest() {
+    return sIsTest;
   }
 }

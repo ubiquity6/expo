@@ -16,15 +16,15 @@ import android.support.v4.app.NotificationCompat;
 import android.text.format.DateUtils;
 
 import de.greenrobot.event.EventBus;
-import expolib_v1.okhttp3.Call;
-import expolib_v1.okhttp3.Callback;
 import expolib_v1.okhttp3.MediaType;
 import expolib_v1.okhttp3.Request;
 import expolib_v1.okhttp3.RequestBody;
-import expolib_v1.okhttp3.Response;
 import host.exp.exponent.Constants;
 import host.exp.exponent.analytics.EXL;
+import host.exp.exponent.fcm.FcmRegistrationIntentService;
 import host.exp.exponent.kernel.ExponentUrls;
+import host.exp.exponent.network.ExpoHttpCallback;
+import host.exp.exponent.network.ExpoResponse;
 import host.exp.exponent.network.ExponentNetwork;
 import host.exp.exponent.storage.ExponentSharedPreferences;
 import host.exp.exponent.utils.AsyncCondition;
@@ -112,6 +112,10 @@ public class NotificationHelper {
       final ExponentNetwork exponentNetwork,
       final ExponentSharedPreferences exponentSharedPreferences,
       final TokenListener listener) {
+    if (Constants.FCM_ENABLED) {
+      FcmRegistrationIntentService.getTokenAndRegister(exponentSharedPreferences.getContext());
+    }
+
     AsyncCondition.wait("devicePushToken", new AsyncCondition.AsyncConditionListener() {
       @Override
       public boolean isReady() {
@@ -145,14 +149,14 @@ public class NotificationHelper {
             .post(body)
             .build();
 
-        exponentNetwork.getClient().call(request, new Callback() {
+        exponentNetwork.getClient().call(request, new ExpoHttpCallback() {
           @Override
-          public void onFailure(Call call, IOException e) {
+          public void onFailure(IOException e) {
             listener.onFailure(e);
           }
 
           @Override
-          public void onResponse(Call call, Response response) throws IOException {
+          public void onResponse(ExpoResponse response) throws IOException {
             if (!response.isSuccessful()) {
               listener.onFailure(new Exception("Couldn't get android push token for device"));
               return;
@@ -486,7 +490,7 @@ public class NotificationHelper {
           intent.putExtra(KernelConstants.NOTIFICATION_KEY, body); // deprecated
           intent.putExtra(KernelConstants.NOTIFICATION_OBJECT_KEY, notificationEvent.toJSONObject(null).toString());
 
-          PendingIntent contentIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+          PendingIntent contentIntent = PendingIntent.getActivity(context, id, intent, PendingIntent.FLAG_UPDATE_CURRENT);
           builder.setContentIntent(contentIntent);
 
           int color = NotificationHelper.getColor(

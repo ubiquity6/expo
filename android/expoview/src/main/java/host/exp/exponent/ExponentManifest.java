@@ -22,6 +22,8 @@ import host.exp.exponent.generated.ExponentBuildConstants;
 import host.exp.exponent.kernel.Crypto;
 import host.exp.exponent.kernel.ExponentUrls;
 import host.exp.exponent.kernel.KernelProvider;
+import host.exp.exponent.network.ExpoHeaders;
+import host.exp.exponent.network.ExpoResponse;
 import host.exp.exponent.network.ExponentHttpClient;
 import host.exp.exponent.network.ExponentNetwork;
 import host.exp.exponent.storage.ExponentSharedPreferences;
@@ -44,8 +46,10 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
 @Singleton
 public class ExponentManifest {
@@ -223,7 +227,7 @@ public class ExponentManifest {
     }
 
     mExponentNetwork.getClient().callSafe(requestBuilder.build(), new ExponentHttpClient.SafeCallback() {
-      private void handleResponse(Response response, boolean isCached) {
+      private void handleResponse(ExpoResponse response, boolean isCached) {
         if (!response.isSuccessful()) {
           ManifestException exception;
           try {
@@ -247,12 +251,12 @@ public class ExponentManifest {
       }
 
       @Override
-      public void onFailure(Call call, IOException e) {
+      public void onFailure(IOException e) {
         listener.onError(new ManifestException(e, manifestUrl));
       }
 
       @Override
-      public void onResponse(Call call, Response response) {
+      public void onResponse(ExpoResponse response) {
         // OkHttp sometimes decides to use the cache anyway here
         boolean isCached = false;
         if (response.networkResponse() == null) {
@@ -262,13 +266,15 @@ public class ExponentManifest {
       }
 
       @Override
-      public void onCachedResponse(Call call, Response response, boolean isEmbedded) {
+      public void onCachedResponse(ExpoResponse response, boolean isEmbedded) {
         // this is only called if network is unavailable for some reason
         handleResponse(response, true);
       }
     });
   }
 
+  // Returns false if manifestUrl should not be cached. May call listener.onError.
+  // Otherwise, returns true and calls one of the callbacks on listener.
   public boolean fetchCachedManifest(final String manifestUrl, final ManifestListener listener) {
     Uri uri = httpManifestUrlBuilder(manifestUrl).build();
     String httpManifestUrl = uri.toString();
@@ -296,66 +302,57 @@ public class ExponentManifest {
     Request request = requestBuilder.build();
     final String finalUri = request.url().toString();
 
-    mExponentNetwork.getClient().tryForcedCachedResponse(finalUri, request, new ExponentHttpClient.SafeCallback() {
-      private void handleResponse(Response response, final boolean isEmbedded) {
-        if (!response.isSuccessful()) {
-          ManifestException exception;
-          try {
-            final JSONObject errorJSON = new JSONObject(response.body().string());
-            exception = new ManifestException(null, manifestUrl, errorJSON);
-          } catch (JSONException | IOException e) {
-            exception = new ManifestException(null, manifestUrl);
-          }
-          listener.onError(exception);
-          return;
+    final String embeddedResponse = mExponentNetwork.getClient().getHardCodedResponse(finalUri);
+
+    // First check shared preferences cache, we always store the latest version here
+    // that has a fully downloaded bundle
+    JSONObject safeCachedManifest = mExponentSharedPreferences.getSafeManifest(manifestUrl);
+    if (safeCachedManifest != null) {
+      JSONObject newerManifest = safeCachedManifest;
+      try {
+        if (embeddedResponse != null) {
+          // compare to embedded manifest in case embedded manifest is newer (i.e. user has installed a new APK)
+          JSONObject embeddedManifest = new JSONObject(embeddedResponse);
+          newerManifest = newerManifest(embeddedManifest, safeCachedManifest);
         }
 
-        try {
-          String manifestString = response.body().string();
+        newerManifest.put(MANIFEST_LOADED_FROM_CACHE_KEY, true);
+      } catch (Exception e) {
+        EXL.e(TAG, e);
+      }
+      fetchManifestStep3(manifestUrl, newerManifest, true, listener);
+    } else {
+      // If nothing is in shared preferences, we need to query the OkHttp cache
+      mExponentNetwork.getClient().tryForcedCachedResponse(finalUri, request, new ExponentHttpClient.SafeCallback() {
+        private void handleResponse(ExpoResponse response, final boolean isEmbedded) {
+          if (!response.isSuccessful()) {
+            ManifestException exception;
+            try {
+              final JSONObject errorJSON = new JSONObject(response.body().string());
+              exception = new ManifestException(null, manifestUrl, errorJSON);
+            } catch (JSONException | IOException e) {
+              exception = new ManifestException(null, manifestUrl);
+            }
+            listener.onError(exception);
+            return;
+          }
 
-          final String embeddedResponse = mExponentNetwork.getClient().getHardCodedResponse(finalUri);
-          ManifestListener newListener = listener;
-          if (embeddedResponse != null) {
-            newListener = new ManifestListener() {
-              @Override
-              public void onCompleted(JSONObject manifest) {
-                if (isEmbedded) {
-                  // When offline it is possible that the embedded manifest is returned but we have
-                  // a more recent one available in shared preferences. Make sure to use the most
-                  // recent one to avoid regressing manifest versions.
-                  try {
-                    ExponentSharedPreferences.ManifestAndBundleUrl manifestAndBundleUrl = mExponentSharedPreferences.getManifest(manifestUrl);
-                    String cachedManifestTimestamp = manifestAndBundleUrl.manifest.getString(MANIFEST_PUBLISHED_TIME_KEY);
-                    String embeddedManifestTimestamp = manifest.getString(MANIFEST_PUBLISHED_TIME_KEY);
-                    DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-                    Date cachedManifestDate = formatter.parse(cachedManifestTimestamp);
-                    Date embeddedManifestDate = formatter.parse(embeddedManifestTimestamp);
-
-                    if (embeddedManifestDate.before(cachedManifestDate)) {
-                      listener.onCompleted(manifestAndBundleUrl.manifest);
-                    } else {
-                      listener.onCompleted(manifest);
-                    }
-                  } catch (Throwable ex) {
-                    EXL.e(TAG, ex);
-                    listener.onCompleted(manifest);
-                  }
-                } else {
+          try {
+            String manifestString = response.body().string();
+            ManifestListener newListener = listener;
+            if (embeddedResponse != null && !isEmbedded) {
+              // compare to embedded manifest in case embedded manifest is newer (i.e. user has installed a new APK)
+              // but we have to pass through fetchManifestStep2 first in order to access the publishedTime key
+              newListener = new ManifestListener() {
+                @Override
+                public void onCompleted(JSONObject manifest) {
                   try {
                     JSONObject embeddedManifest = new JSONObject(embeddedResponse);
                     embeddedManifest.put(ExponentManifest.MANIFEST_LOADED_FROM_CACHE_KEY, true);
 
-                    String cachedManifestTimestamp = manifest.getString(MANIFEST_PUBLISHED_TIME_KEY);
-                    String embeddedManifestTimestamp = embeddedManifest.getString(MANIFEST_PUBLISHED_TIME_KEY);
+                    JSONObject newerManifest = newerManifest(embeddedManifest, manifest);
 
-                    // SimpleDateFormat on Android does not support the ISO-8601 representation of the timezone,
-                    // namely, using 'Z' to represent GMT. Since all our dates here are in the same timezone,
-                    // and we're just comparing them relative to each other, we can just ignore this character.
-                    DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-                    Date cachedManifestDate = formatter.parse(cachedManifestTimestamp);
-                    Date embeddedManifestDate = formatter.parse(embeddedManifestTimestamp);
-
-                    if (embeddedManifestDate.after(cachedManifestDate)) {
+                    if (newerManifest == embeddedManifest) {
                       fetchManifestStep3(manifestUrl, embeddedManifest, true, listener);
                     } else {
                       listener.onCompleted(manifest);
@@ -365,43 +362,43 @@ public class ExponentManifest {
                     listener.onCompleted(manifest);
                   }
                 }
-              }
 
-              @Override
-              public void onError(Exception e) {
-                listener.onError(e);
-              }
+                @Override
+                public void onError(Exception e) {
+                  listener.onError(e);
+                }
 
-              @Override
-              public void onError(String e) {
-                listener.onError(e);
-              }
-            };
+                @Override
+                public void onError(String e) {
+                  listener.onError(e);
+                }
+              };
+            }
+
+            fetchManifestStep2(manifestUrl, manifestString, response.headers(), newListener, false, true);
+          } catch (JSONException e) {
+            listener.onError(e);
+          } catch (IOException e) {
+            listener.onError(e);
           }
-
-          fetchManifestStep2(manifestUrl, manifestString, response.headers(), newListener, false, true);
-        } catch (JSONException e) {
-          listener.onError(e);
-        } catch (IOException e) {
-          listener.onError(e);
         }
-      }
 
-      @Override
-      public void onFailure(Call call, IOException e) {
-        listener.onError(new ManifestException(e, manifestUrl));
-      }
+        @Override
+        public void onFailure(IOException e) {
+          listener.onError(new ManifestException(e, manifestUrl));
+        }
 
-      @Override
-      public void onResponse(Call call, Response response) {
-        handleResponse(response, false);
-      }
+        @Override
+        public void onResponse(ExpoResponse response) {
+          handleResponse(response, false);
+        }
 
-      @Override
-      public void onCachedResponse(Call call, Response response, boolean isEmbedded) {
-        handleResponse(response, isEmbedded);
-      }
-    }, null, null);
+        @Override
+        public void onCachedResponse(ExpoResponse response, boolean isEmbedded) {
+          handleResponse(response, isEmbedded);
+        }
+      }, null, null);
+    }
 
     return true;
   }
@@ -427,7 +424,25 @@ public class ExponentManifest {
     }
   }
 
-  private void fetchManifestStep2(final String manifestUrl, final String manifestString, final Headers headers, final ManifestListener listener, final boolean isEmbedded, boolean isCached) throws JSONException {
+  private JSONObject newerManifest(JSONObject manifest1, JSONObject manifest2) throws JSONException, ParseException {
+    String manifest1Timestamp = manifest1.getString(MANIFEST_PUBLISHED_TIME_KEY);
+    String manifest2Timestamp = manifest2.getString(MANIFEST_PUBLISHED_TIME_KEY);
+
+    // SimpleDateFormat on Android does not support the ISO-8601 representation of the timezone,
+    // namely, using 'Z' to represent GMT. Since all our dates here are in the same timezone,
+    // and we're just comparing them relative to each other, we can just ignore this character.
+    DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+    Date manifest1Date = formatter.parse(manifest1Timestamp);
+    Date manifest2Date = formatter.parse(manifest2Timestamp);
+
+    if (manifest1Date.after(manifest2Date)) {
+      return manifest1;
+    } else {
+      return manifest2;
+    }
+  }
+
+  private void fetchManifestStep2(final String manifestUrl, final String manifestString, final ExpoHeaders headers, final ManifestListener listener, final boolean isEmbedded, boolean isCached) throws JSONException {
     if (Constants.DEBUG_MANIFEST_METHOD_TRACING) {
       Debug.stopMethodTracing();
     }
@@ -487,8 +502,6 @@ public class ExponentManifest {
   }
 
   private void fetchManifestStep3(final String manifestUrl, final JSONObject manifest, final boolean isVerified, final ManifestListener listener) {
-    String bundleUrl;
-
     if (!manifest.has(MANIFEST_BUNDLE_URL_KEY)) {
       listener.onError("No bundleUrl in manifest");
       return;

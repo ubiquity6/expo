@@ -23,6 +23,12 @@ const UsersAppsQuery = gql`
           isLikedByMe
           likeCount
         }
+        snacks(limit: 15, offset: 0) {
+          name
+          description
+          fullName
+          slug
+        }
       }
     }
   }

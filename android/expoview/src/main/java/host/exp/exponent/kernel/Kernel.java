@@ -442,7 +442,7 @@ public class Kernel extends KernelInterface {
     mActivityContext.startActivity(intent);
   }
 
-  private void openShellAppActivity() {
+  private void openShellAppActivity(boolean forceCache) {
     Class activityClass = ShellAppActivity.class;
     if (Constants.isDetached()) {
       try {
@@ -472,6 +472,10 @@ public class Kernel extends KernelInterface {
       // ExperienceActivity - HomeActivity - ExperienceActivity
       // Want HomeActivity to be the root activity if it exists
       intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
+    }
+
+    if (forceCache) {
+      intent.putExtra(KernelConstants.LOAD_FROM_CACHE_KEY, true);
     }
 
     mActivityContext.startActivity(intent);
@@ -638,7 +642,7 @@ public class Kernel extends KernelInterface {
     }
 
     if (manifestUrl.equals(Constants.INITIAL_URL)) {
-      openShellAppActivity();
+      openShellAppActivity(forceCache);
       return;
     }
 
@@ -673,7 +677,7 @@ public class Kernel extends KernelInterface {
 
     final ActivityManager.AppTask finalExistingTask = existingTask;
     if (existingTask == null) {
-      new AppLoader(manifestUrl, mExponentManifest, mExponentSharedPreferences, forceCache) {
+      new AppLoader(manifestUrl, forceCache) {
         @Override
         public void onOptimisticManifest(final JSONObject optimisticManifest) {
           Exponent.getInstance().runOnUiThread(new Runnable() {

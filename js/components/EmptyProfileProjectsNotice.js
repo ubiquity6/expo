@@ -13,12 +13,16 @@ export default class EmptyProfileProjectsNotice extends React.Component {
     if (this.props.isOwnProfile) {
       return (
         <View style={styles.container}>
-          <Text style={SharedStyles.noticeDescriptionText}>
+          <Text style={[SharedStyles.noticeDescriptionText, styles.descriptionText]}>
             Projects that you publish will appear here! Go ahead and publish one, then refresh this
             screen.
           </Text>
 
-          <PrimaryButton plain onPress={this._handleLearnMorePress} fallback={TouchableOpacity}>
+          <PrimaryButton
+            plain
+            onPress={this._handleLearnMorePress}
+            fallback={TouchableOpacity}
+            style={{ marginBottom: 5 }}>
             Learn more about publishing
           </PrimaryButton>
         </View>
@@ -26,7 +30,9 @@ export default class EmptyProfileProjectsNotice extends React.Component {
     } else {
       return (
         <View style={styles.container}>
-          <Text style={SharedStyles.noticeDescriptionText}>No published projects</Text>
+          <Text style={[SharedStyles.noticeDescriptionText, styles.descriptionText]}>
+            No published projects
+          </Text>
         </View>
       );
     }
@@ -41,8 +47,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.greyBackground,
-    paddingVertical: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingTop: 5,
+    alignItems: 'flex-start',
+    paddingHorizontal: 15,
+  },
+  descriptionText: {
+    textAlign: 'left',
+    marginHorizontal: 0,
+    marginBottom: 10,
+    padding: 0,
   },
 });

@@ -7,19 +7,22 @@ const path = require('path');
 const process = require('process');
 const { mkdir } = require('shelljs');
 const { IosPlist, IosPodsTools, ExponentTools, UrlUtils, Project } = require('xdl');
-const JsonFile = require('@exponent/json-file');
+const JsonFile = require('@expo/json-file').default;
 const spawnAsync = require('@exponent/spawn-async');
 const request = require('request-promise-native').defaults({
   resolveWithFullResponse: true,
 });
 const ip = require('ip');
 const uuidv4 = require('uuid/v4');
+const { Modules } = require('xdl');
 
 const { renderExpoKitPodspecAsync, renderPodfileAsync } = IosPodsTools;
 
 const ProjectVersions = require('./project-versions');
 
-const EXPONENT_DIR = path.join(__dirname, '..');
+const EXPONENT_DIR = process.env.EXPONENT_DIR || path.join(__dirname, '..');
+
+const EXPO_CLIENT_UNIVERSAL_MODULES = Modules.getAllForPlatform('ios');
 
 // We need these permissions when testing but don't want them
 // ending up in our release.
@@ -27,9 +30,12 @@ const ANDROID_TEST_PERMISSIONS = `
   <uses-permission android:name="android.permission.WRITE_CONTACTS" />
 `;
 
+// some files are absent on turtle builders and we don't want log errors there
+const isTurtle = process.env.TURTLE_WORKING_DIR_PATH ? true : false;
+
 let isInUniverse = true;
 try {
-  let universePkgJson = require('../../package.json');
+  let universePkgJson = require(process.env.UNIVERSE_PKG_JSON || '../../package.json');
   if (universePkgJson.name !== 'universe') {
     isInUniverse = false;
   }
@@ -58,13 +64,7 @@ const macrosFuncs = {
       return process.env.TEST_SUITE_URI;
     } else if (isInUniverse) {
       try {
-        let testSuitePath = path.join(
-          __dirname,
-          '..',
-          '..',
-          'apps',
-          'test-suite'
-        );
+        let testSuitePath = path.join(__dirname, '..', '..', 'apps', 'test-suite');
         let status = await Project.currentStatus(testSuitePath);
         if (status === 'running') {
           return await UrlUtils.constructManifestUrlAsync(testSuitePath);
@@ -93,8 +93,11 @@ const macrosFuncs = {
     if (isInUniverse) {
       try {
         let lanAddress = ip.address();
-        let localServerUrl = `http://${lanAddress}:3013`
-        let result = await request.get(`${localServerUrl}/expo-test-server-status`);
+        let localServerUrl = `http://${lanAddress}:3013`;
+        let result = await request.get({
+          url: `${localServerUrl}/expo-test-server-status`,
+          timeout: 500, // ms
+        });
         if (result.body === 'running!') {
           url = localServerUrl;
         }
@@ -135,7 +138,8 @@ const macrosFuncs = {
         'Exponent-SDK-Version': sdkVersion,
       });
     } catch (e) {
-      console.error(`Unable to download manifest from ${savedDevHomeUrl}: ${e.message}`);
+      const msg = `Unable to download manifest from ${savedDevHomeUrl}: ${e.message}`
+      console[isTurtle ? 'debug' : 'error'](msg);
       return '';
     }
 
@@ -149,18 +153,24 @@ const macrosFuncs = {
 
     let projectRoot;
     if (isInUniverse && useLegacyWorkflow) {
-      projectRoot = path.join(__dirname, '..', 'js', '__internal__');
+      projectRoot = path.join(EXPONENT_DIR, 'js', '__internal__');
     } else {
-      projectRoot = path.join(__dirname, '..', 'js');
+      projectRoot = path.join(EXPONENT_DIR, 'js');
     }
 
     let manifest;
     try {
       let url = await UrlUtils.constructManifestUrlAsync(projectRoot);
-      console.log(`Generating local kernel manifest from project root ${projectRoot} and url ${url}...`);
+      console.log(
+        `Generating local kernel manifest from project root ${projectRoot} and url ${url}...`
+      );
       manifest = await ExponentTools.getManifestAsync(url, {
         'Exponent-Platform': platform,
       });
+      if (manifest.name !== 'expo-home') {
+        console.log(`Manifest at ${url} is not expo-home; using published kernel manifest instead...`);
+        return '';
+      }
     } catch (e) {
       console.error(`Unable to generate manifest from ${projectRoot}: ${e.message}`);
       return '';
@@ -178,6 +188,28 @@ const macrosFuncs = {
     return null;
   },
 };
+
+function generateUniversalModuleConfig(moduleInfo, modulesPath) {
+  const requiredProperties = ['podName', 'libName', 'subdirectory'];
+
+  requiredProperties.forEach(propName => {
+    if (!moduleInfo[propName]) {
+      throw new Error(
+        `Module info object provided to \`generateUniversalModuleConfig\` is invalid.\nExpected it to have properties ${JSON.stringify(
+          requiredProperties
+        )}, object provided:\n${JSON.stringify(moduleInfo, null, 2)}`
+      );
+    }
+  });
+  return {
+    ...moduleInfo,
+    path: path.join(modulesPath, moduleInfo.libName, moduleInfo.subdirectory),
+  };
+}
+
+function generateUniversalModulesConfig(universalModules, modulesPath) {
+  return universalModules.filter(moduleInfo => moduleInfo.isNativeModule).map(moduleInfo => generateUniversalModuleConfig(moduleInfo, modulesPath));
+}
 
 function kernelManifestObjectToJson(manifest) {
   if (!manifest.id) {
@@ -208,15 +240,13 @@ async function generateIOSBuildConstantsFromMacrosAsync(
       // this flag means don't generate anything, let the user override.
       return config;
     } else {
-      _.map(
-        macros,
-        (value, name) => {
-          if (value == null) { // null == undefined
-            value = '';
-          }
-          config[name] = value;
+      _.map(macros, (value, name) => {
+        if (value == null) {
+          // null == undefined
+          value = '';
         }
-      );
+        config[name] = value;
+      });
       config.EXPO_RUNTIME_VERSION = infoPlistContents.CFBundleVersion
         ? infoPlistContents.CFBundleVersion
         : infoPlistContents.CFBundleShortVersionString;
@@ -241,7 +271,8 @@ async function generateIOSBuildConstantsFromMacrosAsync(
 function validateIOSBuildConstants(config, buildConfiguration) {
   config.USE_GENERATED_DEFAULTS = true;
 
-  let IS_DEV_KERNEL, DEV_KERNEL_SOURCE = '';
+  let IS_DEV_KERNEL,
+    DEV_KERNEL_SOURCE = '';
   if (buildConfiguration === 'Debug') {
     IS_DEV_KERNEL = true;
     DEV_KERNEL_SOURCE = config.DEV_KERNEL_SOURCE;
@@ -254,17 +285,13 @@ function validateIOSBuildConstants(config, buildConfiguration) {
   }
 
   if (IS_DEV_KERNEL) {
-    if (
-      DEV_KERNEL_SOURCE === 'LOCAL'
-      && !config.BUILD_MACHINE_KERNEL_MANIFEST
-    ) {
-      throw new Error(`Error generating local kernel manifest.\nMake sure a local kernel is being served, or switch DEV_KERNEL_SOURCE to use PUBLISHED instead.`);
+    if (DEV_KERNEL_SOURCE === 'LOCAL' && !config.BUILD_MACHINE_KERNEL_MANIFEST) {
+      throw new Error(
+        `Error generating local kernel manifest.\nMake sure a local kernel is being served, or switch DEV_KERNEL_SOURCE to use PUBLISHED instead.`
+      );
     }
 
-    if (
-      DEV_KERNEL_SOURCE === 'PUBLISHED'
-      && !config.DEV_PUBLISHED_KERNEL_MANIFEST
-    ) {
+    if (DEV_KERNEL_SOURCE === 'PUBLISHED' && !config.DEV_PUBLISHED_KERNEL_MANIFEST) {
       throw new Error(`Error downloading DEV published kernel manifest.\n`);
     }
   }
@@ -279,10 +306,8 @@ async function generateAndroidBuildConstantsFromMacrosAsync(macros) {
 
   // android falls back to published dev home if local dev home
   // doesn't exist or had an error.
-  const isLocalManifestEmpty = (
-    !macros.BUILD_MACHINE_KERNEL_MANIFEST
-    || macros.BUILD_MACHINE_KERNEL_MANIFEST === ''
-  );
+  const isLocalManifestEmpty =
+    !macros.BUILD_MACHINE_KERNEL_MANIFEST || macros.BUILD_MACHINE_KERNEL_MANIFEST === '';
   if (isLocalManifestEmpty) {
     macros.BUILD_MACHINE_KERNEL_MANIFEST = macros.DEV_PUBLISHED_KERNEL_MANIFEST;
     console.log('\n\nUsing published dev version of Expo Home\n\n');
@@ -409,24 +434,30 @@ async function modifyIOSInfoPlistAsync(path, filename, templateSubstitutions) {
 
 async function getTemplateSubstitutions() {
   try {
-    return await new JsonFile(
-      path.join(EXPONENT_DIR, '__internal__', 'keys.json')
-    ).readAsync();
+    return await new JsonFile(path.join(EXPONENT_DIR, '__internal__', 'keys.json')).readAsync();
   } catch (e) {
     // Don't have __internal__, use public keys
     console.log('generate-dynamic-macros is falling back to `template-files/keys.json`');
-    return await new JsonFile(
-      path.join(EXPONENT_DIR, 'template-files', 'keys.json')
-    ).readAsync();
+    return await new JsonFile(path.join(EXPONENT_DIR, 'template-files', 'keys.json')).readAsync();
   }
 }
 
-async function writeIOSTemplatesAsync(platform, args, templateFilesPath, templateSubstitutions, iOSInfoPlistContents) {
+async function writeIOSTemplatesAsync(
+  platform,
+  args,
+  templateFilesPath,
+  templateSubstitutions,
+  iOSInfoPlistContents
+) {
   await renderPodfileAsync(
     path.join(templateFilesPath, platform, 'Podfile'),
     path.join(EXPONENT_DIR, 'ios', 'Podfile'),
     {
       TARGET_NAME: 'Exponent',
+      UNIVERSAL_MODULES: generateUniversalModulesConfig(
+        EXPO_CLIENT_UNIVERSAL_MODULES,
+        templateSubstitutions.UNIVERSAL_MODULES_PATH
+      ),
       REACT_NATIVE_PATH: templateSubstitutions.REACT_NATIVE_PATH,
       REACT_NATIVE_EXPO_SUBSPECS: ['Expo', 'ExpoOptional'],
     }
@@ -441,9 +472,13 @@ async function writeIOSTemplatesAsync(platform, args, templateFilesPath, templat
       {
         TARGET_NAME: 'Exponent',
         REACT_NATIVE_PATH: '../js/node_modules/react-native',
+        UNIVERSAL_MODULES: generateUniversalModulesConfig(
+          EXPO_CLIENT_UNIVERSAL_MODULES,
+          '../modules/'
+        ),
         REACT_NATIVE_EXPO_SUBSPECS: ['Expo', 'ExpoOptional'],
       }
-    )
+    );
   }
 
   if (args.expoKitPath) {
@@ -461,6 +496,10 @@ async function writeIOSTemplatesAsync(platform, args, templateFilesPath, templat
       {
         TARGET_NAME: 'exponent-view-template',
         EXPOKIT_PATH: '../..',
+        UNIVERSAL_MODULES: generateUniversalModulesConfig(
+          EXPO_CLIENT_UNIVERSAL_MODULES,
+          '../../modules'
+        ),
         REACT_NATIVE_PATH: '../../../react-native-lab/react-native',
       }
     );
@@ -487,7 +526,13 @@ async function copyTemplateFilesAsync(platform, args, templateSubstitutions) {
 
   await Promise.all(promises);
   if (platform === 'ios') {
-    await writeIOSTemplatesAsync(platform, args, templateFilesPath, templateSubstitutions, args.infoPlist);
+    await writeIOSTemplatesAsync(
+      platform,
+      args,
+      templateFilesPath,
+      templateSubstitutions,
+      args.infoPlist
+    );
   }
 }
 
@@ -510,7 +555,13 @@ async function generateBuildConfigAsync(platform, args) {
       await fs.writeFile(filepath, source, 'utf8');
     }
   } else {
-    await generateIOSBuildConstantsFromMacrosAsync(filepath, macros, configuration, args.infoPlist, args.templateSubstitutions);
+    await generateIOSBuildConstantsFromMacrosAsync(
+      filepath,
+      macros,
+      configuration,
+      args.infoPlist,
+      args.templateSubstitutions
+    );
   }
 }
 
@@ -523,35 +574,33 @@ async function generateBuildConfigAsync(platform, args) {
  *    infoPlistPath
  *    expoKitPath (optional - if provided, generate files for ExpoKit)
  */
-exports.generateDynamicMacrosAsync = async function generateDynamicMacrosAsync(
-  args
-) {
+exports.generateDynamicMacrosAsync = async function generateDynamicMacrosAsync(args) {
   try {
     const { platform } = args;
     const templateSubstitutions = await getTemplateSubstitutions();
     if (platform === 'ios') {
       const infoPlistPath = args.infoPlistPath;
-      args.infoPlist = await modifyIOSInfoPlistAsync(
-        infoPlistPath,
-        'Info',
-        templateSubstitutions
-      );
+      args.infoPlist = await modifyIOSInfoPlistAsync(infoPlistPath, 'Info', templateSubstitutions);
       args.templateSubstitutions = templateSubstitutions;
     } else {
-      args.configuration = process.env.EXPO_ANDROID_GRADLE_TASK_NAMES && process.env.EXPO_ANDROID_GRADLE_TASK_NAMES.includes('Debug') ? 'debug' : 'release';
+      args.configuration =
+        process.env.EXPO_ANDROID_GRADLE_TASK_NAMES &&
+        process.env.EXPO_ANDROID_GRADLE_TASK_NAMES.includes('Debug')
+          ? 'debug'
+          : 'release';
     }
 
     await generateBuildConfigAsync(platform, args);
     await copyTemplateFilesAsync(platform, args, templateSubstitutions);
   } catch (error) {
-    console.error(`There was an error while generating Expo template files, which could lead to unexpected behavior at runtime:\n${error.stack}`);
+    console.error(
+      `There was an error while generating Expo template files, which could lead to unexpected behavior at runtime:\n${error.stack}`
+    );
     process.exit(1);
   }
 };
 
-exports.cleanupDynamicMacrosAsync = async function cleanupDynamicMacrosAsync(
-  args
-) {
+exports.cleanupDynamicMacrosAsync = async function cleanupDynamicMacrosAsync(args) {
   try {
     let platform = args.platform;
     if (platform === 'ios') {

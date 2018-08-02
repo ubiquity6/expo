@@ -1,6 +1,7 @@
 package versioned.host.exp.exponent.modules.api.av.player;
 
 import android.net.Uri;
+import android.os.Handler;
 import android.util.Pair;
 import android.view.Surface;
 
@@ -10,6 +11,7 @@ import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
 
+import java.lang.ref.WeakReference;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -26,7 +28,7 @@ public abstract class PlayerData implements AudioEventHandler {
   static final String STATUS_POSITION_MILLIS_KEY_PATH = "positionMillis";
   static final String STATUS_PLAYABLE_DURATION_MILLIS_KEY_PATH = "playableDurationMillis";
   static final String STATUS_SHOULD_PLAY_KEY_PATH = "shouldPlay";
-  static final String STATUS_IS_PLAYING_KEY_PATH = "isPlaying";
+  public static final String STATUS_IS_PLAYING_KEY_PATH = "isPlaying";
   static final String STATUS_IS_BUFFERING_KEY_PATH = "isBuffering";
   static final String STATUS_RATE_KEY_PATH = "rate";
   static final String STATUS_SHOULD_CORRECT_PITCH_KEY_PATH = "shouldCorrectPitch";
@@ -73,7 +75,26 @@ public abstract class PlayerData implements AudioEventHandler {
   final AVModule mAVModule;
   final Uri mUri;
 
-  private Timer mTimer = null;
+  private Handler mHandler = new Handler();
+  private Runnable mProgressUpdater = new ProgressUpdater(this);
+
+  private class ProgressUpdater implements Runnable {
+    private WeakReference<PlayerData> mPlayerDataWeakReference;
+
+    private ProgressUpdater(PlayerData playerData) {
+      mPlayerDataWeakReference = new WeakReference<>(playerData);
+    }
+
+    @Override
+    public void run() {
+      final PlayerData playerData = mPlayerDataWeakReference.get();
+      if (playerData != null) {
+        playerData.callStatusUpdateListener();
+        playerData.progressUpdateLoop();
+      }
+    }
+  }
+
   private FullscreenPresenter mFullscreenPresenter = null;
   private StatusUpdateListener mStatusUpdateListener = null;
   ErrorListener mErrorListener = null;
@@ -134,32 +155,19 @@ public abstract class PlayerData implements AudioEventHandler {
   abstract boolean shouldContinueUpdatingProgress();
 
   final void stopUpdatingProgressIfNecessary() {
-    if (mTimer != null) {
-      final Timer timer = mTimer;
-      mTimer = null;
-      timer.cancel();
-    }
+    mHandler.removeCallbacks(mProgressUpdater);
   }
 
   private void progressUpdateLoop() {
-    if (shouldContinueUpdatingProgress()) {
-      mTimer = new Timer();
-      mTimer.schedule(new TimerTask() {
-        @Override
-        public void run() {
-          callStatusUpdateListener();
-          progressUpdateLoop();
-        }
-      }, mProgressUpdateIntervalMillis);
-    } else {
+    if (!shouldContinueUpdatingProgress()) {
       stopUpdatingProgressIfNecessary();
+    } else {
+      mHandler.postDelayed(mProgressUpdater, mProgressUpdateIntervalMillis);
     }
   }
 
   final void beginUpdatingProgressIfNecessary() {
-    if (mTimer == null) {
-      progressUpdateLoop();
-    }
+    mHandler.post(mProgressUpdater);
   }
 
   public final void setStatusUpdateListener(final StatusUpdateListener listener) {

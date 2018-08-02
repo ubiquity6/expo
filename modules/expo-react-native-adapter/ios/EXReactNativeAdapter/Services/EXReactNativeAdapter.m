@@ -1,5 +1,6 @@
 // Copyright 2018-present 650 Industries. All rights reserved.
 
+#import <JavaScriptCore/JavaScriptCore.h>
 #import <EXReactNativeAdapter/EXReactNativeAdapter.h>
 #import <React/RCTUIManager.h>
 #import <React/RCTAppState.h>
@@ -13,6 +14,13 @@
 
 @end
 
+@interface RCTBridge ()
+
+- (JSGlobalContextRef)jsContextRef;
+- (void)dispatchBlock:(dispatch_block_t)block queue:(dispatch_queue_t)queue;
+
+@end
+
 @implementation EXReactNativeAdapter
 
 EX_REGISTER_MODULE();
@@ -22,9 +30,9 @@ EX_REGISTER_MODULE();
   return nil;
 }
 
-+ (const NSArray<NSString *> *)internalModuleNames
++ (const NSArray<Protocol *> *)exportedInterfaces
 {
-  return @[@"LifecycleManager", @"UIManager"];
+  return @[@protocol(EXAppLifecycleService), @protocol(EXUIManager), @protocol(EXJavaScriptContextProvider)];
 }
 
 # pragma mark - Lifecycle methods
@@ -48,20 +56,29 @@ EX_REGISTER_MODULE();
 
 - (void)addUIBlock:(void (^)(id))block forView:(id)viewId ofClass:(Class)klass
 {
-  __weak EXReactNativeAdapter *weakSelf = self;
-  dispatch_async(_bridge.uiManager.methodQueue, ^{
-    __strong EXReactNativeAdapter *strongSelf = weakSelf;
-    if (strongSelf) {
-      [strongSelf.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager, NSDictionary<NSNumber *, UIView *> *viewRegistry) {
-        UIView *view = viewRegistry[viewId];
-        if (![view isKindOfClass:klass]) {
-          block(nil);
-        } else {
-          block(view);
-        }
-      }];
+  [self addUIBlock:^(UIView *view) {
+    if (![view isKindOfClass:klass]) {
+      block(nil);
+    } else {
+      block(view);
     }
-  });
+  } forView:viewId];
+}
+
+- (void)addUIBlock:(void (^)(id))block forView:(id)viewId implementingProtocol:(Protocol *)protocol
+{
+  [self addUIBlock:^(UIView *view) {
+    if (![view.class conformsToProtocol:protocol]) {
+      block(nil);
+    } else {
+      block(view);
+    }
+  } forView:viewId];
+}
+
+- (void)dispatchOnClientThread:(dispatch_block_t)block
+{
+  [self.bridge dispatchBlock:block queue:RCTJSThread];
 }
 
 - (void)setBridge:(RCTBridge *)bridge
@@ -77,6 +94,13 @@ EX_REGISTER_MODULE();
 - (void)unregisterAppLifecycleListener:(id<EXAppLifecycleListener>)listener
 {
   [_lifecycleListeners removeObject:listener];
+}
+
+# pragma mark - EXJavaScriptContextProvider
+
+- (JSGlobalContextRef)javaScriptContextRef
+{
+  return _bridge.jsContextRef;
 }
 
 # pragma mark - App state observing
@@ -105,11 +129,25 @@ EX_REGISTER_MODULE();
        RCTSharedApplication().applicationState == UIApplicationStateBackground
       )
     ) {
+    [self setAppStateToBackground];
+  } else if (!_isForegrounded && RCTSharedApplication().applicationState == UIApplicationStateActive) {
+    [self setAppStateToForeground];
+  }
+}
+
+- (void)setAppStateToBackground
+{
+  if (_isForegrounded) {
     [_lifecycleListeners enumerateObjectsUsingBlock:^(id<EXAppLifecycleListener>  _Nonnull obj, BOOL * _Nonnull stop) {
       [obj onAppBackgrounded];
     }];
     _isForegrounded = false;
-  } else if (!_isForegrounded && RCTSharedApplication().applicationState == UIApplicationStateActive) {
+  }
+}
+
+- (void)setAppStateToForeground
+{
+  if (!_isForegrounded) {
     [_lifecycleListeners enumerateObjectsUsingBlock:^(id<EXAppLifecycleListener>  _Nonnull obj, BOOL * _Nonnull stop) {
       [obj onAppForegrounded];
     }];
@@ -120,6 +158,22 @@ EX_REGISTER_MODULE();
 - (void)stopObserving
 {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+# pragma mark - Internal methods
+
+- (void)addUIBlock:(void (^)(UIView *view))block forView:(id)viewId
+{
+  __weak EXReactNativeAdapter *weakSelf = self;
+  dispatch_async(_bridge.uiManager.methodQueue, ^{
+    __strong EXReactNativeAdapter *strongSelf = weakSelf;
+    if (strongSelf) {
+      [strongSelf.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager, NSDictionary<NSNumber *, UIView *> *viewRegistry) {
+        UIView *view = viewRegistry[viewId];
+        block(view);
+      }];
+    }
+  });
 }
 
 @end

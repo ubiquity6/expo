@@ -2,14 +2,20 @@
 
 #import <objc/runtime.h>
 #import <EXCore/EXModuleRegistry.h>
-#import <EXCore/EXModuleRegistry+Downcasting.h>
 #import <EXCore/EXModuleRegistryConsumer.h>
+#import <EXCore/EXSingletonModule.h>
 
 @interface EXModuleRegistry ()
 
-@property NSMutableDictionary<NSString *, id<EXInternalModule>> *internalModules;
+@property (nonatomic, weak) id<EXModuleRegistryDelegate> delegate;
+
+@property NSMutableSet<id<EXInternalModule>> *internalModulesSet;
+@property NSMapTable<Protocol *, id<EXInternalModule>> *internalModules;
+@property NSMapTable<Protocol *, NSMutableArray<id<EXInternalModule>> *> *internalModulesPreResolution;
+@property NSMutableDictionary<Class, EXExportedModule *> *exportedModulesByClass;
 @property NSMutableDictionary<const NSString *, EXExportedModule *> *exportedModules;
 @property NSMutableDictionary<const NSString *, EXViewManager *> *viewManagerModules;
+@property NSMutableDictionary<const NSString *, EXSingletonModule *> *singletonModules;
 
 @property NSMutableSet<id<EXModuleRegistryConsumer>> *registryConsumers;
 
@@ -22,9 +28,12 @@
 - (instancetype)init
 {
   if (self = [super init]) {
-    _internalModules = [NSMutableDictionary dictionary];
+    _internalModulesSet = [NSMutableSet set];
+    _internalModulesPreResolution = [NSMapTable weakToStrongObjectsMapTable];
+    _exportedModulesByClass = [NSMutableDictionary dictionary];
     _exportedModules = [NSMutableDictionary dictionary];
     _viewManagerModules = [NSMutableDictionary dictionary];
+    _singletonModules = [NSMutableDictionary dictionary];
     _registryConsumers = [NSMutableSet set];
   }
   return self;
@@ -33,6 +42,7 @@
 - (instancetype)initWithInternalModules:(NSSet<id<EXInternalModule>> *)internalModules
                         exportedModules:(NSSet<EXExportedModule *> *)exportedModules
                            viewManagers:(NSSet<EXViewManager *> *)viewManagers
+                       singletonModules:(NSSet<EXSingletonModule *> *)singletonModules
 {
   if (self = [self init]) {
     for (id<EXInternalModule> internalModule in internalModules) {
@@ -42,16 +52,41 @@
     for (EXExportedModule *exportedModule in exportedModules) {
       [self registerExportedModule:exportedModule];
     }
-    
+
     for (EXViewManager *viewManager in viewManagers) {
       [self registerViewManager:viewManager];
+    }
+
+    for (EXSingletonModule *singletonModule in singletonModules) {
+      [self registerSingletonModule:singletonModule];
     }
   }
   return self;
 }
 
+- (void)setDelegate:(id<EXModuleRegistryDelegate>)delegate
+{
+  _delegate = delegate;
+}
+
+- (void)resolveInternalModulesConflicts
+{
+  _internalModules = [NSMapTable weakToStrongObjectsMapTable];
+  for (Protocol *protocol in _internalModulesPreResolution) {
+    NSArray<id<EXInternalModule>> *conflictingModules = [_internalModulesPreResolution objectForKey:protocol];
+
+    if ([conflictingModules count] > 1 && _delegate) {
+      id<EXInternalModule> resolvedModule = [_delegate pickInternalModuleImplementingInterface:protocol fromAmongModules:conflictingModules];
+      [_internalModules setObject:resolvedModule forKey:protocol];
+    } else {
+      [_internalModules setObject:[conflictingModules lastObject] forKey:protocol];
+    }
+  }
+}
+
 - (void)initialize
 {
+  [self resolveInternalModulesConflicts];
   for (id<EXModuleRegistryConsumer> registryConsumer in _registryConsumers) {
     [registryConsumer setModuleRegistry:self];
   }
@@ -61,14 +96,24 @@
 
 - (void)registerInternalModule:(id<EXInternalModule>)internalModule
 {
-  for (NSString *internalModuleName in [[internalModule class] internalModuleNames]) {
-    if (_internalModules[internalModuleName]) {
-      EXLogWarn(@"Expo module %@ overrides %@ as the module registered as %@.", internalModule, _internalModules[internalModuleName], internalModuleName);
-    } else {
-      _internalModules[internalModuleName] = internalModule;
-      [self maybeAddRegistryConsumer:internalModule];
+  for (Protocol *exportedInterface in [[internalModule class] exportedInterfaces]) {
+    if (![_internalModulesPreResolution objectForKey:exportedInterface]) {
+      [_internalModulesPreResolution setObject:[NSMutableArray array] forKey:exportedInterface];
     }
+
+    [[_internalModulesPreResolution objectForKey:exportedInterface] addObject:internalModule];
   }
+
+  [_internalModulesSet addObject:internalModule];
+  [self maybeAddRegistryConsumer:internalModule];
+}
+
+- (id<EXInternalModule>)unregisterInternalModuleForProtocol:(Protocol *)protocol
+{
+  id<EXInternalModule> module = [_internalModules objectForKey:protocol];
+  [_internalModulesSet removeObject:module];
+  [_internalModules removeObjectForKey:protocol];
+  return module;
 }
 
 - (void)registerExportedModule:(EXExportedModule *)exportedModule
@@ -76,10 +121,11 @@
   const NSString *exportedModuleName = [[exportedModule class] exportedModuleName];
   if (_exportedModules[exportedModuleName]) {
     EXLogWarn(@"Expo module %@ overrides %@ as the module exported as %@.", exportedModule, _exportedModules[exportedModuleName], exportedModuleName);
-  } else {
-    _exportedModules[exportedModuleName] = exportedModule;
-    [self maybeAddRegistryConsumer:exportedModule];
   }
+
+  _exportedModules[exportedModuleName] = exportedModule;
+  [_exportedModulesByClass setObject:exportedModule forKey:(id<NSCopying>)[exportedModule class]];
+  [self maybeAddRegistryConsumer:exportedModule];
 }
 
 - (void)registerViewManager:(EXViewManager *)viewManager
@@ -87,10 +133,15 @@
   const NSString *exportedModuleName = [[viewManager class] exportedModuleName];
   if (_viewManagerModules[exportedModuleName]) {
     EXLogWarn(@"Expo view manager %@ overrides %@ as the module exported as %@.", viewManager, _viewManagerModules[exportedModuleName], exportedModuleName);
-  } else {
-    _viewManagerModules[exportedModuleName] = viewManager;
-    [self maybeAddRegistryConsumer:viewManager];
   }
+
+  _viewManagerModules[exportedModuleName] = viewManager;
+  [self maybeAddRegistryConsumer:viewManager];
+}
+
+- (void)registerSingletonModule:(EXSingletonModule *)singletonModule
+{
+  [_singletonModules setObject:singletonModule forKey:[[singletonModule class] name]];
 }
 
 - (void)maybeAddRegistryConsumer:(id)maybeConsumer
@@ -107,28 +158,29 @@
 
 # pragma mark - Registry API
 
-- (id)getModuleForName:(NSString *)name
+- (id)getModuleImplementingProtocol:(Protocol *)protocol
 {
-  return _internalModules[name];
+  return [_internalModules objectForKey:protocol];
 }
 
-- (id<EXInternalModule>)getExportedModuleForName:(NSString *)name
+- (EXExportedModule *)getExportedModuleForName:(NSString *)name
 {
   return _exportedModules[name];
 }
 
-- (id)getModuleForName:(NSString *)name downcastedTo:(Protocol *)protocol exception:(NSException * __autoreleasing *)outException
+- (EXExportedModule *)getExportedModuleOfClass:(Class)moduleClass
 {
-  id<EXInternalModule> instance = [self getModuleForName:name];
-  if (instance) {
-    [self downcastInstance:instance toProtocol:protocol exception:outException];
-  }
-  return instance;
+  return [_exportedModulesByClass objectForKey:moduleClass];
+}
+
+- (EXSingletonModule *)getSingletonModuleForName:(NSString *)singletonModuleName
+{
+  return [_singletonModules objectForKey:singletonModuleName];
 }
 
 - (NSArray<id<EXInternalModule>> *)getAllInternalModules
 {
-  return [[NSSet setWithArray:[_internalModules allValues]] allObjects];
+  return [_internalModulesSet allObjects];
 }
 
 - (NSArray<EXExportedModule *> *)getAllExportedModules
@@ -141,22 +193,9 @@
   return [_viewManagerModules allValues];
 }
 
-# pragma mark - Utilities
-
-- (id<EXInternalModule>)downcastInstance:(id<EXInternalModule>)instance toProtocol:(Protocol *)protocol exception:(NSException * __autoreleasing *)outException
+- (NSArray<EXSingletonModule *> *)getAllSingletonModules
 {
-  @try {
-    [self downcastInstance:instance toProtocol:protocol];
-    return instance;
-  }
-  @catch (NSException *exception) {
-    if (outException) {
-      *outException = exception;
-    } else {
-      EXLogWarn(@"Downcasting exception is being ignored: %@.", exception);
-    }
-    return nil;
-  }
+  return [_singletonModules allValues];
 }
 
 @end

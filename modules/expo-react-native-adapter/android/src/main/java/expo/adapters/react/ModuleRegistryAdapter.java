@@ -8,6 +8,8 @@ import com.facebook.react.uimanager.ViewManager;
 import java.util.ArrayList;
 import java.util.List;
 
+import expo.adapters.react.views.SimpleViewManagerAdapter;
+import expo.adapters.react.views.ViewGroupManagerAdapter;
 import expo.core.ModuleRegistry;
 import expo.core.ModuleRegistryProvider;
 
@@ -17,7 +19,7 @@ import expo.core.ModuleRegistryProvider;
  * which in turn are created by packages provided by {@link ModuleRegistryProvider}.
  */
 public class ModuleRegistryAdapter implements ReactPackage {
-  private ModuleRegistryProvider mModuleRegistryProvider;
+  protected ModuleRegistryProvider mModuleRegistryProvider;
 
   public ModuleRegistryAdapter(ModuleRegistryProvider moduleRegistryProvider) {
     mModuleRegistryProvider = moduleRegistryProvider;
@@ -27,6 +29,10 @@ public class ModuleRegistryAdapter implements ReactPackage {
   public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
     ModuleRegistry moduleRegistry = mModuleRegistryProvider.get(reactContext);
 
+    return getNativeModulesFromModuleRegistry(reactContext, moduleRegistry);
+  }
+
+  protected List<NativeModule> getNativeModulesFromModuleRegistry(ReactApplicationContext reactContext, ModuleRegistry moduleRegistry) {
     List<NativeModule> nativeModulesList = new ArrayList<>(2);
 
     nativeModulesList.add(new NativeModulesProxy(reactContext, moduleRegistry));
@@ -45,7 +51,14 @@ public class ModuleRegistryAdapter implements ReactPackage {
     List<ViewManager> viewManagerList = new ArrayList<>();
 
     for (expo.core.ViewManager viewManager : moduleRegistry.getAllViewManagers()) {
-      viewManagerList.add(new ViewManagerAdapter(viewManager));
+      switch (viewManager.getViewManagerType()) {
+        case GROUP:
+          viewManagerList.add(new ViewGroupManagerAdapter(viewManager));
+          break;
+        case SIMPLE:
+          viewManagerList.add(new SimpleViewManagerAdapter(viewManager));
+          break;
+      }
     }
     return viewManagerList;
   }
