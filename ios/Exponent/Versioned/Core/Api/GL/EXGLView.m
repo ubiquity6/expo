@@ -211,7 +211,7 @@ RCT_NOT_IMPLEMENTED(- (instancetype)init);
     
     [weakSelf runOnUIThread:^{
       glBindRenderbuffer(GL_RENDERBUFFER, viewColorbuffer);
-      [weakSelf.uiEaglCtx renderbufferStorage:GL_RENDERBUFFER fromDrawable:(CAEAGLLayer *)self.layer];
+      [weakSelf.uiEaglCtx renderbufferStorage:GL_RENDERBUFFER fromDrawable:(CAEAGLLayer *)weakSelf.layer];
     }];
     
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
