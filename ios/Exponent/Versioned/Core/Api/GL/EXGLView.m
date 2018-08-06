@@ -134,8 +134,9 @@ RCT_NOT_IMPLEMENTED(- (instancetype)init);
 
 - (void)runOnUIThread:(void(^)(void))callback
 {
+  __weak EXGLView* weakSelf = self;
   dispatch_sync(dispatch_get_main_queue(), ^{
-    [_glContext runInEAGLContext:_uiEaglCtx callback:callback];
+    [weakSelf.glContext runInEAGLContext:weakSelf.uiEaglCtx callback:callback];
   });
 }
 
@@ -176,60 +177,71 @@ RCT_NOT_IMPLEMENTED(- (instancetype)init);
   // to get rid of redundant resizes if layoutSubviews is called multiple times with the same frame size
   _viewBuffersSize = newViewBuffersSize;
 
+  __weak EXGLView* weakSelf = self;
+  
   [_glContext runAsync:^{
+    GLuint viewDepthStencilbuffer = weakSelf.viewDepthStencilbuffer;
+    GLuint viewColorbuffer = weakSelf.viewColorbuffer;
+    GLuint viewFramebuffer = weakSelf.viewFramebuffer;
+    GLuint msaaRenderbuffer = weakSelf.msaaRenderbuffer;
+    GLuint msaaFramebuffer = weakSelf.msaaFramebuffer;
+    
+    GLint layerWidth = weakSelf.layerWidth;
+    GLint layerHeight = weakSelf.layerHeight;
+    
     // Save surrounding framebuffer/renderbuffer
     GLint prevFramebuffer;
     GLint prevRenderbuffer;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFramebuffer);
     glGetIntegerv(GL_RENDERBUFFER_BINDING, &prevRenderbuffer);
-    if (prevFramebuffer == _viewFramebuffer) {
+    if (prevFramebuffer == viewFramebuffer) {
       prevFramebuffer = 0;
     }
     
     // Delete old buffers if they exist
-    [self deleteViewBuffers];
+    [weakSelf deleteViewBuffers];
     
     // Set up view framebuffer
-    glGenFramebuffers(1, &_viewFramebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, _viewFramebuffer);
+    glGenFramebuffers(1, &viewFramebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, viewFramebuffer);
     
     // Set up new color renderbuffer
-    glGenRenderbuffers(1, &_viewColorbuffer);
-    glBindRenderbuffer(GL_RENDERBUFFER, _viewColorbuffer);
+    glGenRenderbuffers(1, &viewColorbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, viewColorbuffer);
     
-    [self runOnUIThread:^{
-      glBindRenderbuffer(GL_RENDERBUFFER, _viewColorbuffer);
-      [_uiEaglCtx renderbufferStorage:GL_RENDERBUFFER fromDrawable:(CAEAGLLayer *)self.layer];
+    [weakSelf runOnUIThread:^{
+      glBindRenderbuffer(GL_RENDERBUFFER, viewColorbuffer);
+      [weakSelf.uiEaglCtx renderbufferStorage:GL_RENDERBUFFER fromDrawable:(CAEAGLLayer *)self.layer];
     }];
     
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                              GL_RENDERBUFFER, _viewColorbuffer);
-    glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, &_layerWidth);
-    glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, &_layerHeight);
+                              GL_RENDERBUFFER, viewColorbuffer);
+    glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, &layerWidth);
+    glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, &layerHeight);
     
     // Set up MSAA framebuffer/renderbuffer
-    glGenFramebuffers(1, &_msaaFramebuffer);
-    glGenRenderbuffers(1, &_msaaRenderbuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, _msaaFramebuffer);
-    glBindRenderbuffer(GL_RENDERBUFFER, _msaaRenderbuffer);
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, self.msaaSamples.intValue, GL_RGBA8,
-                                     _layerWidth, _layerHeight);
+    glGenFramebuffers(1, &msaaFramebuffer);
+    glGenRenderbuffers(1, &msaaRenderbuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, msaaFramebuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, msaaRenderbuffer);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, weakSelf.msaaSamples.intValue, GL_RGBA8,
+                                     layerWidth, layerHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                              GL_RENDERBUFFER, _msaaRenderbuffer);
+                              GL_RENDERBUFFER, msaaRenderbuffer);
 
-    if (_glContext.isInitialized) {
-      UEXGLContextSetDefaultFramebuffer(_glContext.contextId, _msaaFramebuffer);
+    if (weakSelf.glContext.isInitialized) {
+      UEXGLContextSetDefaultFramebuffer(weakSelf.glContext.contextId, msaaFramebuffer);
     }
     
     // Set up new depth+stencil renderbuffer
-    glGenRenderbuffers(1, &_viewDepthStencilbuffer);
-    glBindRenderbuffer(GL_RENDERBUFFER, _viewDepthStencilbuffer);
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, self.msaaSamples.intValue, GL_DEPTH24_STENCIL8,
-                                     _layerWidth, _layerHeight);
+    glGenRenderbuffers(1, &viewDepthStencilbuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, viewDepthStencilbuffer);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, weakSelf.msaaSamples.intValue, GL_DEPTH24_STENCIL8,
+                                     layerWidth, layerHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                              GL_RENDERBUFFER, _viewDepthStencilbuffer);
+                              GL_RENDERBUFFER, viewDepthStencilbuffer);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT,
-                              GL_RENDERBUFFER, _viewDepthStencilbuffer);
+                              GL_RENDERBUFFER, viewDepthStencilbuffer);
     
     // Resize viewport
     glViewport(0, 0, width, height);
@@ -239,6 +251,15 @@ RCT_NOT_IMPLEMENTED(- (instancetype)init);
       glBindFramebuffer(GL_FRAMEBUFFER, prevFramebuffer);
     }
     glBindRenderbuffer(GL_RENDERBUFFER, prevRenderbuffer);
+    
+    weakSelf.viewDepthStencilbuffer = viewDepthStencilbuffer;
+    weakSelf.viewColorbuffer = viewColorbuffer;
+    weakSelf.viewFramebuffer = viewFramebuffer;
+    weakSelf.msaaRenderbuffer = msaaRenderbuffer;
+    weakSelf.msaaFramebuffer = msaaFramebuffer;
+    
+    weakSelf.layerWidth = layerWidth;
+    weakSelf.layerHeight = layerHeight;
     
     // TODO(nikki): Notify JS component of resize
   }];
@@ -272,9 +293,10 @@ RCT_NOT_IMPLEMENTED(- (instancetype)init);
     // This happens exactly at `gl.endFrameEXP()` in the queue
     if (_viewColorbuffer != 0 && !_renderbufferPresented) {
       // bind renderbuffer and present it on the layer
+      __weak EXGLView* weakSelf = self;
       [_glContext runInEAGLContext:_uiEaglCtx callback:^{
-        glBindRenderbuffer(GL_RENDERBUFFER, _viewColorbuffer);
-        [_uiEaglCtx presentRenderbuffer:GL_RENDERBUFFER];
+        glBindRenderbuffer(GL_RENDERBUFFER, weakSelf.viewColorbuffer);
+        [weakSelf.uiEaglCtx presentRenderbuffer:GL_RENDERBUFFER];
       }];
       
       // mark renderbuffer as presented
