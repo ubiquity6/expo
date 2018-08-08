@@ -1,4 +1,4 @@
-#import "EXAppLoadingView.h"
+black#import "EXAppLoadingView.h"
 #import "EXAppLoadingCancelView.h"
 #import "EXAppLoadingProgressView.h"
 #import "EXConstants.h"
@@ -46,7 +46,7 @@
   [super setFrame:frame];
   _loadingView.frame = self.bounds;
   _vBackgroundImage.frame = self.bounds;
-  
+
   CGFloat progressHeight = ([self _isIPhoneX]) ? 48.0f : 36.0f;
   _vProgress.frame = CGRectMake(0, self.bounds.size.height - progressHeight, self.bounds.size.width, progressHeight);
   if (!_usesSplashFromNSBundle && !_manifest && _vCancel) {
@@ -71,7 +71,7 @@
 
 - (void)_setUpViews
 {
-  self.backgroundColor = [UIColor whiteColor];
+  self.backgroundColor = [UIColor blackColor];
   BOOL hasSplashScreen = NO;
   if (_usesSplashFromNSBundle) {
     // Display the launch screen behind the React view so that the React view appears to seamlessly load
@@ -86,7 +86,7 @@
       self.loadingView.layer.zPosition = 1000;
       self.loadingView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
       [self addSubview:self.loadingView];
-      
+
       _loadingIndicatorFromNib = (UIActivityIndicatorView *)[self.loadingView viewWithTag:1];
       _loadingIndicatorFromNib.hidesWhenStopped = YES;
       [_loadingIndicatorFromNib startAnimating];
@@ -96,7 +96,7 @@
   if (!hasSplashScreen) {
     self.loadingView = [[UIView alloc] init];
     [self addSubview:_loadingView];
-    _loadingView.backgroundColor = [UIColor whiteColor];
+    _loadingView.backgroundColor = [UIColor blackColor];
     if ([self _isCancelAvailable]) {
       _vCancel = [[EXAppLoadingCancelView alloc] init];
       _vCancel.delegate = self;
@@ -126,7 +126,7 @@
   if (!_manifest) {
     return;
   }
-  UIColor *backgroundColor = [UIColor whiteColor];
+  UIColor *backgroundColor = [UIColor blackColor];
   RCTResizeMode backgroundImageResizeMode = RCTResizeModeContain;
   if (_vBackgroundImage) {
     [_vBackgroundImage removeFromSuperview];
@@ -135,7 +135,7 @@
 
   RCTImageSource *imageSource;
   NSDictionary *splash;
-  
+
   @try {
     if (_manifest[@"ios"] && _manifest[@"ios"][@"splash"]) {
       splash = _manifest[@"ios"][@"splash"];
@@ -148,7 +148,7 @@
       backgroundColor = maybeColor;
     }
     backgroundImageResizeMode = ([splash[@"resizeMode"] isEqualToString:@"cover"]) ? RCTResizeModeCover : RCTResizeModeContain;
-    
+
     NSString *imageUrl;
     if (splash[@"tabletImageUrl"]) {
       imageUrl = splash[@"tabletImageUrl"];
@@ -159,7 +159,7 @@
       imageSource = [RCTConvert RCTImageSource:@{ @"uri":imageUrl }];
     }
   } @catch (NSException *e) {}
-  
+
   EXKernelAppRecord *homeAppRecord = [EXKernel sharedInstance].appRegistry.homeAppRecord;
   if (imageSource && homeAppRecord.appManager.reactBridge) {
     // hey, it's better than pulling in SDWebImage, right?
@@ -175,7 +175,7 @@
   } else {
     [self _hidePlaceholder];
   }
-  
+
   _loadingView.backgroundColor = backgroundColor;
   [self bringSubviewToFront:_vProgress];
 }
