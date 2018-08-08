@@ -1,4 +1,4 @@
-black#import "EXAppLoadingView.h"
+#import "EXAppLoadingView.h"
 #import "EXAppLoadingCancelView.h"
 #import "EXAppLoadingProgressView.h"
 #import "EXConstants.h"
